@@ -10,84 +10,94 @@ Instead of keeping temporary upload files scattered through Downloads, BoxIt sto
 - Import local files with drag and drop or a file picker
 - Store file blobs locally in IndexedDB
 - Browse, rename, preview, download, and delete files by box
-- Search across box names, filenames, and file types
-- Sort boxes/files by default order, recency, name, or size
-- Show exact BoxIt storage usage and browser quota usage when available
+- Search and sort boxes/files
+- Show local storage usage
 - Detect exact duplicate files and remove redundant copies deliberately
-- Use stored files on website upload controls, including hidden/custom inputs
-- Choose between multiple upload targets on a page
-- Paste clipboard images directly into a box
-- Capture the visible tab as a PNG directly into a box
-- Drop webpage image/file URLs into a box for local capture
-- Right-click images or links and save them to the current capture-default box
-- Automatically create a `Captured` box when a right-click capture has no chosen destination
-- Convert supported files locally without uploading them to a conversion service
-- Give boxes automatic lifetimes, session cleanup, or one-shot deletion
+- Use stored files on website upload controls
+- Paste clipboard images and capture screenshots
+- Right-click images or links into BoxIt
+- Convert supported files locally
+- Give boxes timed, session, or one-shot lifetimes
 
 ## Quality of life
 
-The popup includes a global search field and visual sort control. `Ctrl/Cmd+K` or `/` focuses search without changing the stored order in IndexedDB.
+The popup includes global search and visual sorting. `Ctrl/Cmd+K` or `/` focuses search.
 
-Rename controls are available for both boxes and files. Supported files can be previewed locally:
-
-- images
-- text/code/data files, with large text previews truncated
-- PDFs
-- audio
-- video
-
-The storage line shows the exact total size of BoxIt file blobs plus browser quota usage when the browser exposes it.
-
-Duplicate detection is exact rather than filename-based. BoxIt only hashes same-size candidates within the same box, using SHA-256, and marks byte-for-byte matches. The cleanup action keeps the oldest copy and only removes extras after confirmation. Automatic hashing is capped at 64 MB per candidate so opening the popup does not try to digest very large files. Empty files are supported as duplicates too.
+Supported local previews include images, text/code/data files, PDFs, audio, and video. Duplicate detection hashes same-size candidates in the same box with SHA-256. Automatic duplicate hashing is deferred until idle time and skips uncached candidates larger than 8 MB.
 
 ## Quick capture
 
-Each box has three quick-capture controls:
+Each box can paste clipboard images, capture the visible tab as PNG, and become the destination for future right-click captures. The drop zone also accepts local files and supported webpage image/file URLs.
 
-- **Paste image** reads image data from the clipboard and stores it locally.
-- **Screenshot** captures the visible area of the active tab and stores it as a PNG.
-- **Capture here** makes that box the destination for future right-click captures.
+## Conversion engine v2
 
-The page drop zone also accepts local files and supported webpage image/file URLs. Right-click capture uses a page-context fallback for resources such as `blob:` images when a normal extension fetch is not enough.
+Supported files get a **Convert** action. Conversion always creates a new local file in the same box and leaves the original untouched.
 
-## File conversion
+The converter is registry-based: image and structured-data conversion are separate adapters behind one engine. New converter families can be added without growing one large format switch.
 
-Supported files get a **Convert** action in their file row. Conversion always creates a new local file in the same box and leaves the original untouched.
+### Images
 
-Current converters:
+Inputs currently recognized:
 
-- PNG, JPEG, WebP, SVG, BMP, and AVIF images to PNG, JPEG, or WebP
-- Optional image downscaling with aspect ratio preserved and no upscaling
+- PNG
+- JPEG
+- WebP
+- SVG
+- BMP
+- AVIF
+
+Outputs:
+
+- PNG
+- JPEG
+- WebP
+- BMP
+
+Image options:
+
+- fit within maximum width/height while preserving aspect ratio
+- exact width/height mode
+- 0°, 90°, 180°, or 270° rotation
 - JPEG/WebP quality control
-- JSON arrays to CSV
-- CSV tables to formatted JSON
+- background color when flattening transparency to JPEG or BMP
+- automatic metadata stripping because output pixels are redrawn locally
 
-Image conversion is performed with browser canvas APIs and data conversion is handled directly in the extension. No conversion website or remote API is used.
+Image output is bounded to 16,384 pixels per side and 80 million pixels.
 
-Conversion guardrails:
+### Structured data
 
-- Image outputs are bounded to 16,384 pixels per side and 80 million output pixels
-- JSON/CSV conversion is limited to 20 MB in the current MVP
-- Animated GIF conversion is intentionally not included yet because flattening an animation into one frame would be misleading
-- PDF, DOCX, video, audio, archive, and other complex formats are not claimed as supported until BoxIt has a reliable local converter for them
+BoxIt now uses one shared structured-data model for:
+
+- JSON
+- NDJSON / JSONL
+- CSV
+- TSV
+
+Any recognized structured-data input can convert to any of those four outputs. CSV/TSV can be treated as headerless tables, JSON can be pretty-printed or compacted, quoted fields are parsed correctly, duplicate/blank headers are normalized, and nested values are JSON-stringified when a flat table format cannot represent them directly.
+
+Structured-data conversion is limited to 20 MB per file in the current browser-popup implementation.
+
+### Conversion result feedback
+
+BoxIt reports the output format, row count or image dimensions, and whether the converted copy is smaller or larger than the original.
+
+Complex formats such as PDF, DOCX, video, audio, and archives are still intentionally unsupported until they have reliable local adapters.
 
 ## Temporary boxes
 
-Every box can keep the default permanent lifetime or clean itself up automatically.
-
 Lifetime modes:
 
-- **Keep forever** leaves the box alone until you delete it.
-- **Delete after a duration** accepts a custom number of minutes, hours, or days. Chrome alarms enforce the expiry even while the popup is closed.
-- **Delete when browser restarts** keeps the box for the current browser session and removes it on the next browser launch.
-- **Delete after first successful Use** can be enabled alongside any lifetime mode. The entire box is deleted only after BoxIt confirms a stored file was successfully placed into a website upload control. Failed Uses do not trigger deletion.
+- **Keep forever**
+- **Delete after a duration**
+- **Delete when browser restarts**
+- **Delete after first successful Use**
 
-Existing boxes have a **Lifetime** control, and temporary boxes display a compact remaining-time/session/one-shot label in the popup.
+Timed expiry uses Chrome alarms. One-shot boxes require explicit cleanup after a file is placed into a website so BoxIt does not delete local data before the user can verify the site actually accepted it.
 
 ## Privacy
 
-BoxIt is local-first. Stored file contents live in the browser's IndexedDB. Clipboard images and screenshots are captured only after an explicit user action. Right-click and webpage captures fetch the item you selected so it can be stored locally. File conversion, previews, search, sorting, storage totals, and duplicate hashing happen inside the extension. Files leave BoxIt only when you explicitly use or download them.
+BoxIt is local-first. Stored file contents live in IndexedDB. Clipboard capture, screenshots, conversion, previews, search, sorting, storage totals, and duplicate hashing run locally. Files leave BoxIt only when you explicitly use or download them.
 
 ## Next direction
 
-The MVP feature set is now broad enough that the next priority should be a real-browser test and cleanup pass before adding another major feature. After that, likely directions are a side-panel workflow, broader local conversion support, or import/export of whole boxes.
+The next major architecture candidates are a persistent side-panel workflow, box import/export, and additional local converter adapters for document or media formats.
