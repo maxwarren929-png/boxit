@@ -233,7 +233,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return;
   }
 
-  if (message?.type !== 'BOXIT_USE_FILE') return;
+  if (message?.type !== 'BOXIT_USE_FILE_V2') return;
 
   try {
     const targets = scanTargets(message.file || {});
