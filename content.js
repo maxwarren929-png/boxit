@@ -223,6 +223,20 @@ function installFile(input, payload) {
   flashTarget(input);
 }
 
+async function fetchPageResource(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Could not read this page resource (${response.status}).`);
+  const blob = await response.blob();
+  if (blob.size > 25 * 1024 * 1024) {
+    throw new Error('This page resource is too large for the capture fallback.');
+  }
+  return {
+    bytes: [...new Uint8Array(await blob.arrayBuffer())],
+    type: blob.type || response.headers.get('content-type') || 'application/octet-stream',
+    url: response.url || url
+  };
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === 'BOXIT_GET_TARGETS') {
     const targets = scanTargets(message.file || {});
@@ -231,6 +245,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       targets: targets.map(target => ({ ...target, detail: targetDetail(target) }))
     });
     return;
+  }
+
+  if (message?.type === 'BOXIT_FETCH_PAGE_RESOURCE') {
+    fetchPageResource(message.url)
+      .then(resource => sendResponse({ ok: true, resource }))
+      .catch(error => sendResponse({ ok: false, error: error?.message || 'BoxIt could not read this page resource.' }));
+    return true;
   }
 
   if (message?.type !== 'BOXIT_USE_FILE_V2') return;
