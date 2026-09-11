@@ -18,6 +18,7 @@ Instead of keeping temporary upload files scattered through Downloads, BoxIt sto
 - Right-click images or links and save them to the current capture-default box
 - Automatically create a `Captured` box when a right-click capture has no chosen destination
 - Convert supported files locally without uploading them to a conversion service
+- Give boxes automatic lifetimes, session cleanup, or one-shot deletion
 
 ## Quick capture
 
@@ -50,10 +51,23 @@ Conversion guardrails:
 - Animated GIF conversion is intentionally not included yet because flattening an animation into one frame would be misleading
 - PDF, DOCX, video, audio, archive, and other complex formats are not claimed as supported until BoxIt has a reliable local converter for them
 
+## Temporary boxes
+
+Every box can keep the default permanent lifetime or clean itself up automatically.
+
+Lifetime modes:
+
+- **Keep forever** leaves the box alone until you delete it.
+- **Delete after a duration** accepts a custom number of minutes, hours, or days. Chrome alarms enforce the expiry even while the popup is closed.
+- **Delete when browser restarts** keeps the box for the current browser session and removes it on the next browser launch.
+- **Delete after first successful Use** can be enabled alongside any lifetime mode. The entire box is deleted only after BoxIt confirms a stored file was successfully placed into a website upload control. Failed Uses do not trigger deletion.
+
+Existing boxes have a **Lifetime** control, and temporary boxes display a compact remaining-time/session/one-shot label in the popup.
+
 ## Privacy
 
 BoxIt is local-first. Stored file contents live in the browser's IndexedDB. Clipboard images and screenshots are captured only after an explicit user action. Right-click and webpage captures fetch the item you selected so it can be stored locally. File conversion happens inside the extension. Files leave BoxIt only when you explicitly use or download them.
 
 ## Next direction
 
-Planned follow-up work includes automatic expiry and one-shot boxes, search, previews, storage management, and broader conversion support where it can be done safely and reliably in-browser.
+Planned follow-up work includes search, previews, storage management, and broader conversion support where it can be done safely and reliably in-browser.
