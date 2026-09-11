@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>BoxIt</title>
   <link rel="stylesheet" href="popup.css">
+  <link rel="stylesheet" href="use.css">
 </head>
 <body>
   <main class="app-shell">
@@ -21,6 +22,11 @@
       </div>
       <button id="new-box" class="button button-primary" type="button">New box</button>
     </header>
+
+    <div id="use-status" class="use-status hidden" role="status" aria-live="polite">
+      <span class="use-status-indicator" aria-hidden="true"></span>
+      <span id="use-status-text"></span>
+    </div>
 
     <section id="empty" class="empty-state hidden" aria-live="polite">
       <div class="empty-illustration" aria-hidden="true">
@@ -52,6 +58,20 @@
         <button class="button button-primary" type="submit">Create box</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="target-dialog" class="dialog target-dialog">
+    <div class="dialog-card">
+      <div class="dialog-heading">
+        <p class="dialog-kicker">Use file</p>
+        <h2>Choose an upload target</h2>
+        <p id="target-file-name" class="target-file-name"></p>
+      </div>
+      <div id="target-list" class="target-list" role="list"></div>
+      <div class="dialog-actions">
+        <button id="cancel-target" class="button button-secondary" type="button">Cancel</button>
+      </div>
+    </div>
   </dialog>
 
   <template id="box-template">
