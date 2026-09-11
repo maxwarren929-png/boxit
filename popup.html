@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="popup.css">
   <link rel="stylesheet" href="use.css">
   <link rel="stylesheet" href="capture.css">
+  <link rel="stylesheet" href="conversion.css">
 </head>
 <body>
   <main class="app-shell">
@@ -75,6 +76,55 @@
     </div>
   </dialog>
 
+  <dialog id="convert-dialog" class="dialog convert-dialog">
+    <form id="convert-form" class="dialog-card">
+      <div class="dialog-heading">
+        <p class="dialog-kicker">Convert file</p>
+        <h2>Create a converted copy</h2>
+        <p id="convert-file-name" class="convert-file-name"></p>
+      </div>
+
+      <div class="convert-grid">
+        <label class="convert-field">
+          <span>Output format</span>
+          <select id="convert-format"></select>
+        </label>
+
+        <div id="convert-image-options" class="convert-image-options hidden">
+          <div>
+            <span class="convert-field-label">Maximum dimensions</span>
+            <div class="convert-dimensions">
+              <label class="convert-field">
+                <span>Width</span>
+                <input id="convert-max-width" type="number" min="1" max="16384" inputmode="numeric" placeholder="Original">
+              </label>
+              <label class="convert-field">
+                <span>Height</span>
+                <input id="convert-max-height" type="number" min="1" max="16384" inputmode="numeric" placeholder="Original">
+              </label>
+            </div>
+            <p id="convert-dimensions-note" class="convert-dimension-note">Leave both blank to keep the original dimensions.</p>
+          </div>
+
+          <label id="convert-quality-field" class="convert-field">
+            <span>Quality</span>
+            <div class="convert-quality-row">
+              <input id="convert-quality" type="range" min="10" max="100" value="90">
+              <span id="convert-quality-value" class="convert-quality-value">90%</span>
+            </div>
+          </label>
+        </div>
+
+        <div class="convert-summary">Conversion happens locally. The original file stays untouched and the converted copy is saved into the same box.</div>
+      </div>
+
+      <div class="dialog-actions">
+        <button id="cancel-convert" class="button button-secondary" type="button">Cancel</button>
+        <button id="convert-submit" class="button button-primary convert-submit" type="submit">Convert</button>
+      </div>
+    </form>
+  </dialog>
+
   <template id="box-template">
     <article class="box-card">
       <div class="box-head">
@@ -139,5 +189,6 @@
   </template>
 
   <script type="module" src="popup.js"></script>
+  <script type="module" src="conversion-ui.js"></script>
 </body>
 </html>
