@@ -382,7 +382,9 @@ statusObserver.observe(statusEl, { attributes: true, childList: true, subtree: t
 chrome.runtime.onMessage.addListener(message => {
   if (message?.type !== 'BOXIT_BOX_REMOVED') return;
   if (message.boxId === editingBoxId) editDialog.close();
-  setTimeout(() => window.location.reload(), 250);
+  if (message.reason !== 'used') {
+    setTimeout(() => window.location.reload(), 250);
+  }
 });
 
 const boxesObserver = new MutationObserver(queueSync);
