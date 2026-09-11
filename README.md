@@ -35,13 +35,20 @@ Supported files get a **Convert** action in their file row. Conversion always cr
 
 Current converters:
 
-- Images to PNG, JPEG, or WebP
-- Optional image downscaling with aspect ratio preserved
+- PNG, JPEG, WebP, SVG, BMP, and AVIF images to PNG, JPEG, or WebP
+- Optional image downscaling with aspect ratio preserved and no upscaling
 - JPEG/WebP quality control
 - JSON arrays to CSV
 - CSV tables to formatted JSON
 
 Image conversion is performed with browser canvas APIs and data conversion is handled directly in the extension. No conversion website or remote API is used.
+
+Conversion guardrails:
+
+- Image outputs are bounded to 16,384 pixels per side and 80 million output pixels
+- JSON/CSV conversion is limited to 20 MB in the current MVP
+- Animated GIF conversion is intentionally not included yet because flattening an animation into one frame would be misleading
+- PDF, DOCX, video, audio, archive, and other complex formats are not claimed as supported until BoxIt has a reliable local converter for them
 
 ## Privacy
 
