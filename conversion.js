@@ -1,8 +1,10 @@
 import { imageConverter, imageDimensions } from './conversion-image.js';
 import { tableConverter } from './conversion-table.js';
+import { documentConverter } from './conversion-document.js';
+import { mediaConverter } from './conversion-media.js';
 import { byteSummary } from './conversion-utils.js';
 
-const CONVERTERS = [imageConverter, tableConverter];
+const CONVERTERS = [imageConverter, tableConverter, documentConverter, mediaConverter];
 
 function converterFor(record) {
   return CONVERTERS.find(converter => converter.matches(record)) || null;
