@@ -1,15 +1,14 @@
 import { listBoxes, listFiles, getFile, addBlob } from './db.js';
 import {
   canConvert,
-  conversionKind,
+  conversionProfile,
   conversionTargets,
-  suggestedImageTarget,
-  imageDimensions,
+  suggestedConversionTarget,
+  inspectConversion,
   convertRecord
 } from './conversion.js';
 
 const LAST_CONVERSION_KEY = 'boxitLastConversion';
-
 const boxesEl = document.querySelector('#boxes');
 const dialog = document.querySelector('#convert-dialog');
 const form = document.querySelector('#convert-form');
@@ -24,12 +23,15 @@ const qualityInput = document.querySelector('#convert-quality');
 const qualityValue = document.querySelector('#convert-quality-value');
 const cancelButton = document.querySelector('#cancel-convert');
 const submitButton = document.querySelector('#convert-submit');
+const summaryEl = document.querySelector('.convert-summary');
 const statusEl = document.querySelector('#use-status');
 const statusText = document.querySelector('#use-status-text');
 
 let pendingRecord = null;
+let pendingProfile = null;
+let pendingInspection = null;
 let syncing = false;
-let syncQueued = false;
+let syncDirty = false;
 let statusTimer = null;
 
 function showStatus(message, tone = 'neutral', timeout = 5000) {
@@ -38,54 +40,127 @@ function showStatus(message, tone = 'neutral', timeout = 5000) {
   statusEl.dataset.tone = tone;
   statusEl.classList.remove('hidden');
   if (timeout > 0) {
-    statusTimer = setTimeout(() => statusEl.classList.add('hidden'), timeout);
+    statusTimer = setTimeout(() => {
+      if (statusText.textContent === message) statusEl.classList.add('hidden');
+    }, timeout);
   }
 }
 
-function queueSync() {
-  if (syncQueued) return;
-  syncQueued = true;
-  queueMicrotask(async () => {
-    syncQueued = false;
-    await syncFileRows();
+function addDynamicControls() {
+  if (document.querySelector('#convert-v2-options')) return;
+
+  const formatDescription = document.createElement('p');
+  formatDescription.id = 'convert-format-description';
+  formatDescription.className = 'convert-option-note';
+  formatSelect.after(formatDescription);
+
+  const imageAdvanced = document.createElement('div');
+  imageAdvanced.id = 'convert-v2-options';
+  imageAdvanced.className = 'convert-v2-options';
+  imageAdvanced.innerHTML = `
+    <div class="convert-v2-row">
+      <label class="convert-field">
+        <span>Resize mode</span>
+        <select id="convert-resize-mode">
+          <option value="contain">Fit within dimensions</option>
+          <option value="stretch">Exact dimensions</option>
+        </select>
+      </label>
+      <label class="convert-field">
+        <span>Rotate</span>
+        <select id="convert-rotation">
+          <option value="0">No rotation</option>
+          <option value="90">90° clockwise</option>
+          <option value="180">180°</option>
+          <option value="270">90° counter-clockwise</option>
+        </select>
+      </label>
+    </div>
+    <label id="convert-background-field" class="convert-field hidden">
+      <span>Flatten transparency onto</span>
+      <div class="convert-color-row">
+        <input id="convert-background" type="color" value="#ffffff" aria-label="Background color">
+        <span id="convert-background-value">#ffffff</span>
+      </div>
+    </label>
+    <p class="convert-option-note">Image conversion redraws pixels locally, so EXIF and other embedded image metadata are removed.</p>
+  `;
+  imageOptions.prepend(imageAdvanced);
+
+  const dataOptions = document.createElement('div');
+  dataOptions.id = 'convert-data-options';
+  dataOptions.className = 'convert-data-options hidden';
+  dataOptions.innerHTML = `
+    <label id="convert-header-field" class="convert-toggle-row hidden">
+      <input id="convert-first-row-headers" type="checkbox" checked>
+      <span>
+        <strong>First row contains headers</strong>
+        <small>Turn this off for headerless CSV or TSV files.</small>
+      </span>
+    </label>
+    <label id="convert-json-style-field" class="convert-field hidden">
+      <span>JSON formatting</span>
+      <select id="convert-json-indent">
+        <option value="2">Pretty · 2 spaces</option>
+        <option value="4">Pretty · 4 spaces</option>
+        <option value="0">Compact</option>
+      </select>
+    </label>
+    <p class="convert-option-note">CSV, TSV, JSON and NDJSON all pass through the same structured-data engine, so you can convert between any of them.</p>
+  `;
+  summaryEl.before(dataOptions);
+
+  document.querySelector('#convert-background').addEventListener('input', event => {
+    document.querySelector('#convert-background-value').textContent = event.target.value;
   });
 }
 
+function queueSync() {
+  if (syncing) {
+    syncDirty = true;
+    return;
+  }
+  queueMicrotask(syncFileRows);
+}
+
 async function syncFileRows() {
-  if (syncing) return;
+  if (syncing) {
+    syncDirty = true;
+    return;
+  }
   syncing = true;
   try {
     const boxes = await listBoxes();
     const cards = [...boxesEl.querySelectorAll('.box-card')];
-
     for (let boxIndex = 0; boxIndex < Math.min(boxes.length, cards.length); boxIndex += 1) {
       const files = await listFiles(boxes[boxIndex].id);
       const rows = [...cards[boxIndex].querySelectorAll('.file-row')];
-
       for (let fileIndex = 0; fileIndex < Math.min(files.length, rows.length); fileIndex += 1) {
         const record = files[fileIndex];
         const row = rows[fileIndex];
         row.dataset.fileId = record.id;
-
         let button = row.querySelector('.convert-file');
         if (!canConvert(record)) {
           button?.remove();
           continue;
         }
-
         if (!button) {
           button = document.createElement('button');
           button.type = 'button';
           button.className = 'button button-file button-file-convert convert-file';
           button.textContent = 'Convert';
           const actions = row.querySelector('.file-actions');
-          const downloadButton = actions?.querySelector('.download-file');
-          if (actions) actions.insertBefore(button, downloadButton || actions.firstChild);
+          const download = actions?.querySelector('.download-file');
+          if (actions) actions.insertBefore(button, download || actions.firstChild);
         }
       }
     }
   } finally {
     syncing = false;
+    if (syncDirty) {
+      syncDirty = false;
+      queueMicrotask(syncFileRows);
+    }
   }
 }
 
@@ -94,19 +169,56 @@ function resetDialog() {
   formatSelect.replaceChildren();
   maxWidthInput.value = '';
   maxHeightInput.value = '';
+  maxWidthInput.placeholder = 'Original';
+  maxHeightInput.placeholder = 'Original';
   qualityInput.value = '90';
   qualityValue.textContent = '90%';
+  document.querySelector('#convert-resize-mode').value = 'contain';
+  document.querySelector('#convert-rotation').value = '0';
+  document.querySelector('#convert-background').value = '#ffffff';
+  document.querySelector('#convert-background-value').textContent = '#ffffff';
+  document.querySelector('#convert-first-row-headers').checked = true;
+  document.querySelector('#convert-json-indent').value = '2';
+  document.querySelector('#convert-format-description').textContent = '';
   dimensionsNote.textContent = 'Leave both blank to keep the original dimensions.';
+  summaryEl.textContent = 'Conversion happens locally. The original file stays untouched and the converted copy is saved into the same box.';
   pendingRecord = null;
+  pendingProfile = null;
+  pendingInspection = null;
 }
 
-function updateQualityVisibility() {
-  const lossy = ['jpeg', 'webp'].includes(formatSelect.value);
-  qualityField.classList.toggle('hidden', !lossy);
+function selectedTarget() {
+  return conversionTargets(pendingRecord).find(target => target.value === formatSelect.value) || null;
+}
+
+function updateOptionVisibility() {
+  const target = selectedTarget();
+  document.querySelector('#convert-format-description').textContent = target?.description || '';
+
+  const isImage = pendingProfile?.id === 'image';
+  const isTable = pendingProfile?.id === 'table';
+  imageOptions.classList.toggle('hidden', !isImage);
+  document.querySelector('#convert-data-options').classList.toggle('hidden', !isTable);
+
+  if (isImage) {
+    const lossy = ['jpeg', 'webp'].includes(formatSelect.value);
+    qualityField.classList.toggle('hidden', !lossy);
+    document.querySelector('#convert-background-field').classList.toggle('hidden', !['jpeg', 'bmp'].includes(formatSelect.value));
+    summaryEl.textContent = 'Local pixel conversion. The original is preserved; image metadata is stripped from the new copy.';
+  }
+
+  if (isTable) {
+    const source = pendingInspection?.sourceFormat;
+    document.querySelector('#convert-header-field').classList.toggle('hidden', !['csv', 'tsv'].includes(source));
+    document.querySelector('#convert-json-style-field').classList.toggle('hidden', formatSelect.value !== 'json');
+    summaryEl.textContent = 'Local structured-data conversion. Nested values are preserved as JSON strings when a table format cannot represent them directly.';
+  }
 }
 
 async function openConvertDialog(record) {
   pendingRecord = record;
+  pendingProfile = conversionProfile(record);
+  if (!pendingProfile) throw new Error('BoxIt does not have a converter for this file yet.');
   fileNameEl.textContent = record.name;
   formatSelect.replaceChildren();
 
@@ -117,59 +229,47 @@ async function openConvertDialog(record) {
     option.textContent = target.label;
     formatSelect.append(option);
   }
+  formatSelect.value = suggestedConversionTarget(record) || targets[0]?.value || '';
 
-  const kind = conversionKind(record);
-  const isImage = kind === 'image';
-  imageOptions.classList.toggle('hidden', !isImage);
-
-  if (isImage) {
-    formatSelect.value = suggestedImageTarget(record);
-    if (!formatSelect.value && targets.length) formatSelect.value = targets[0].value;
-    dimensionsNote.textContent = 'Reading image dimensions...';
-    try {
-      const dimensions = await imageDimensions(record.blob);
-      maxWidthInput.placeholder = String(dimensions.width);
-      maxHeightInput.placeholder = String(dimensions.height);
-      dimensionsNote.textContent = `Original: ${dimensions.width}×${dimensions.height}. Limits preserve aspect ratio and never upscale.`;
-    } catch {
-      maxWidthInput.placeholder = '';
-      maxHeightInput.placeholder = '';
-      dimensionsNote.textContent = 'Leave both blank to keep the original dimensions.';
-    }
+  pendingInspection = await inspectConversion(record);
+  if (pendingProfile.id === 'image' && pendingInspection) {
+    maxWidthInput.placeholder = String(pendingInspection.width || 'Original');
+    maxHeightInput.placeholder = String(pendingInspection.height || 'Original');
+    dimensionsNote.textContent = `Original: ${pendingInspection.width}×${pendingInspection.height}. Fit mode preserves aspect ratio and never upscales.`;
   }
 
-  updateQualityVisibility();
+  updateOptionVisibility();
   dialog.showModal();
   requestAnimationFrame(() => formatSelect.focus());
 }
 
 async function convertPending() {
   if (!pendingRecord) return;
-
   submitButton.disabled = true;
-  submitButton.textContent = 'Converting...';
-
+  submitButton.textContent = 'Converting…';
   try {
     const options = {
       format: formatSelect.value,
       maxWidth: maxWidthInput.value ? Number(maxWidthInput.value) : undefined,
       maxHeight: maxHeightInput.value ? Number(maxHeightInput.value) : undefined,
-      quality: Number(qualityInput.value)
+      resizeMode: document.querySelector('#convert-resize-mode').value,
+      rotation: Number(document.querySelector('#convert-rotation').value),
+      quality: Number(qualityInput.value),
+      background: document.querySelector('#convert-background').value,
+      firstRowHeaders: document.querySelector('#convert-first-row-headers').checked,
+      jsonIndent: Number(document.querySelector('#convert-json-indent').value)
     };
 
     const result = await convertRecord(pendingRecord, options);
-    const saved = await addBlob(pendingRecord.boxId, result.blob, result.name, {
-      source: 'conversion'
-    });
-
+    const saved = await addBlob(pendingRecord.boxId, result.blob, result.name, { source: 'conversion-v2' });
+    const sizePart = result.sizeNote ? ` · ${result.sizeNote}` : '';
     await chrome.storage.local.set({
       [LAST_CONVERSION_KEY]: {
         fileName: saved.name,
-        summary: result.summary,
+        summary: `${result.summary}${sizePart}`,
         convertedAt: Date.now()
       }
     });
-
     dialog.close();
     window.location.reload();
   } catch (error) {
@@ -183,14 +283,14 @@ boxesEl.addEventListener('click', async event => {
   const button = event.target.closest('.convert-file');
   if (!button) return;
   const row = button.closest('.file-row');
-  const fileId = row?.dataset.fileId;
+  const fileId = row?.dataset.fileId || row?.dataset.safeFileId || row?.dataset.qolFileId;
   if (!fileId) {
     showStatus('BoxIt could not identify that file. Reopen the popup and try again.', 'error');
     return;
   }
 
   button.disabled = true;
-  button.textContent = 'Opening...';
+  button.textContent = 'Opening…';
   try {
     const record = await getFile(fileId);
     if (!record) throw new Error('That file is no longer available in BoxIt.');
@@ -205,14 +305,10 @@ boxesEl.addEventListener('click', async event => {
   }
 });
 
-formatSelect.addEventListener('change', updateQualityVisibility);
-qualityInput.addEventListener('input', () => {
-  qualityValue.textContent = `${qualityInput.value}%`;
-});
+formatSelect.addEventListener('change', updateOptionVisibility);
+qualityInput.addEventListener('input', () => { qualityValue.textContent = `${qualityInput.value}%`; });
 cancelButton.addEventListener('click', () => dialog.close());
-dialog.addEventListener('click', event => {
-  if (event.target === dialog) dialog.close();
-});
+dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
 dialog.addEventListener('close', () => {
   submitButton.disabled = false;
   submitButton.textContent = 'Convert';
@@ -223,6 +319,7 @@ form.addEventListener('submit', async event => {
   await convertPending();
 });
 
+addDynamicControls();
 const observer = new MutationObserver(queueSync);
 observer.observe(boxesEl, { childList: true, subtree: true });
 
@@ -230,7 +327,6 @@ async function showRecentConversion() {
   const stored = await chrome.storage.local.get(LAST_CONVERSION_KEY);
   const conversion = stored[LAST_CONVERSION_KEY];
   if (!conversion) return;
-
   const recent = Date.now() - Number(conversion.convertedAt || 0) < 30000;
   if (recent && conversion.fileName) {
     const detail = conversion.summary ? ` (${conversion.summary})` : '';
