@@ -1,0 +1,115 @@
+.convert-dialog {
+  width: min(420px, calc(100% - 28px));
+}
+
+.convert-file-name {
+  overflow: hidden;
+  margin-top: 6px !important;
+  color: var(--muted-strong) !important;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.convert-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.convert-field {
+  display: grid;
+  gap: 7px;
+}
+
+.convert-field > span,
+.convert-field-label {
+  color: var(--muted-strong);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.convert-field select,
+.convert-field input[type="number"] {
+  width: 100%;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #0d1218;
+  color: var(--text);
+  padding: 0 10px;
+}
+
+.convert-field select:hover,
+.convert-field input[type="number"]:hover {
+  border-color: var(--border-strong);
+}
+
+.convert-field select:focus-visible,
+.convert-field input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.convert-image-options {
+  display: grid;
+  gap: 12px;
+}
+
+.convert-dimensions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+}
+
+.convert-dimension-note {
+  margin: -2px 0 0;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.convert-quality-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.convert-quality-row input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.convert-quality-value {
+  min-width: 38px;
+  color: var(--muted-strong);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.convert-summary {
+  padding: 10px 11px;
+  border: 1px solid rgba(120, 167, 255, 0.14);
+  border-radius: 9px;
+  background: rgba(120, 167, 255, 0.055);
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.button-file-convert {
+  color: #b8caff;
+}
+
+.button-file-convert:hover {
+  border-color: rgba(120, 167, 255, 0.22);
+  background: rgba(120, 167, 255, 0.09);
+  color: #dce6ff;
+}
+
+.convert-submit[disabled] {
+  cursor: wait;
+  opacity: 0.72;
+}

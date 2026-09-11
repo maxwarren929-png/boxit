@@ -1,0 +1,135 @@
+.use-status {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 12px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--muted-strong);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.use-status-indicator {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(120, 167, 255, 0.1);
+}
+
+.use-status[data-tone="success"] {
+  border-color: rgba(111, 210, 155, 0.2);
+  background: rgba(111, 210, 155, 0.055);
+}
+
+.use-status[data-tone="success"] .use-status-indicator {
+  background: #6fd29b;
+  box-shadow: 0 0 0 3px rgba(111, 210, 155, 0.1);
+}
+
+.use-status[data-tone="error"] {
+  border-color: rgba(255, 140, 140, 0.2);
+  background: rgba(255, 140, 140, 0.055);
+  color: #d8b1b1;
+}
+
+.use-status[data-tone="error"] .use-status-indicator {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px rgba(255, 140, 140, 0.1);
+}
+
+.target-dialog {
+  width: min(420px, calc(100% - 28px));
+}
+
+.target-file-name {
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--muted-strong) !important;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.target-list {
+  display: grid;
+  gap: 7px;
+  max-height: 310px;
+  margin-top: 16px;
+  overflow-y: auto;
+}
+
+.target-option {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #0d1218;
+  color: var(--text);
+  padding: 10px 11px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+
+.target-option:hover,
+.target-option:focus-visible {
+  border-color: #48618a;
+  background: var(--surface-2);
+}
+
+.target-option:active {
+  transform: translateY(1px);
+}
+
+.target-option-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.target-option-label {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 720;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.target-option-detail {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.target-option-state {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted-strong);
+  padding: 3px 6px;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.target-option[data-compatible="false"] .target-option-state {
+  border-color: rgba(255, 190, 110, 0.18);
+  color: #d8ba91;
+}
+
+.use-file[disabled],
+.target-option[disabled] {
+  cursor: progress;
+  opacity: 0.58;
+}

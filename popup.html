@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BoxIt</title>
+  <link rel="stylesheet" href="popup.css">
+  <link rel="stylesheet" href="use.css">
+  <link rel="stylesheet" href="capture.css">
+  <link rel="stylesheet" href="conversion.css">
+  <link rel="stylesheet" href="lifecycle.css">
+  <link rel="stylesheet" href="qol.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <span></span>
+          <span></span>
+        </div>
+        <div>
+          <p class="brand-name">BoxIt</p>
+          <p class="brand-subtitle">Temporary file storage</p>
+        </div>
+      </div>
+      <button id="new-box" class="button button-primary" type="button">New box</button>
+    </header>
+
+    <div id="use-status" class="use-status hidden" role="status" aria-live="polite">
+      <span class="use-status-indicator" aria-hidden="true"></span>
+      <span id="use-status-text"></span>
+    </div>
+
+    <section id="empty" class="empty-state hidden" aria-live="polite">
+      <div class="empty-illustration" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+      <h1>Create your first box</h1>
+      <p>Keep temporary uploads out of Downloads and ready when you need them.</p>
+      <button id="empty-new-box" class="button button-primary" type="button">Create box</button>
+    </section>
+
+    <section id="boxes" class="boxes" aria-label="Your boxes"></section>
+  </main>
+
+  <dialog id="new-box-dialog" class="dialog">
+    <form id="new-box-form" method="dialog" class="dialog-card">
+      <div class="dialog-heading">
+        <p class="dialog-kicker">New box</p>
+        <h2>Name this box</h2>
+        <p>Use a short name for the files you want to keep together.</p>
+      </div>
+      <label class="field">
+        <span>Box name</span>
+        <input id="box-name-input" name="box-name" type="text" maxlength="48" autocomplete="off" placeholder="Project assets" required>
+      </label>
+      <div class="dialog-actions">
+        <button id="cancel-new-box" class="button button-secondary" type="button">Cancel</button>
+        <button class="button button-primary" type="submit">Create box</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="target-dialog" class="dialog target-dialog">
+    <div class="dialog-card">
+      <div class="dialog-heading">
+        <p class="dialog-kicker">Use file</p>
+        <h2>Choose an upload target</h2>
+        <p id="target-file-name" class="target-file-name"></p>
+      </div>
+      <div id="target-list" class="target-list" role="list"></div>
+      <div class="dialog-actions">
+        <button id="cancel-target" class="button button-secondary" type="button">Cancel</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="convert-dialog" class="dialog convert-dialog">
+    <form id="convert-form" class="dialog-card">
+      <div class="dialog-heading">
+        <p class="dialog-kicker">Convert file</p>
+        <h2>Create a converted copy</h2>
+        <p id="convert-file-name" class="convert-file-name"></p>
+      </div>
+
+      <div class="convert-grid">
+        <label class="convert-field">
+          <span>Output format</span>
+          <select id="convert-format"></select>
+        </label>
+
+        <div id="convert-image-options" class="convert-image-options hidden">
+          <div>
+            <span class="convert-field-label">Maximum dimensions</span>
+            <div class="convert-dimensions">
+              <label class="convert-field">
+                <span>Width</span>
+                <input id="convert-max-width" type="number" min="1" max="16384" inputmode="numeric" placeholder="Original">
+              </label>
+              <label class="convert-field">
+                <span>Height</span>
+                <input id="convert-max-height" type="number" min="1" max="16384" inputmode="numeric" placeholder="Original">
+              </label>
+            </div>
+            <p id="convert-dimensions-note" class="convert-dimension-note">Leave both blank to keep the original dimensions.</p>
+          </div>
+
+          <label id="convert-quality-field" class="convert-field">
+            <span>Quality</span>
+            <div class="convert-quality-row">
+              <input id="convert-quality" type="range" min="10" max="100" value="90">
+              <span id="convert-quality-value" class="convert-quality-value">90%</span>
+            </div>
+          </label>
+        </div>
+
+        <div class="convert-summary">Conversion happens locally. The original file stays untouched and the converted copy is saved into the same box.</div>
+      </div>
+
+      <div class="dialog-actions">
+        <button id="cancel-convert" class="button button-secondary" type="button">Cancel</button>
+        <button id="convert-submit" class="button button-primary convert-submit" type="submit">Convert</button>
+      </div>
+    </form>
+  </dialog>
+
+  <template id="box-template">
+    <article class="box-card">
+      <div class="box-head">
+        <div class="box-title-group">
+          <div class="box-glyph" aria-hidden="true"><span></span></div>
+          <div>
+            <div class="box-name-line">
+              <h2 class="box-name"></h2>
+              <span class="capture-default-tag hidden">Capture default</span>
+            </div>
+            <p class="box-meta"></p>
+          </div>
+        </div>
+        <button class="button button-ghost button-danger delete-box" type="button">Delete box</button>
+      </div>
+
+      <div class="capture-tools" aria-label="Quick capture">
+        <div class="capture-tools-copy">
+          <strong>Quick capture</strong>
+          <span>Put something in this box without saving it first.</span>
+        </div>
+        <div class="capture-tools-actions">
+          <button class="button capture-action paste-image" type="button">Paste image</button>
+          <button class="button capture-action capture-screenshot" type="button">Screenshot</button>
+          <button class="button capture-action set-capture-box" type="button">Capture here</button>
+        </div>
+      </div>
+
+      <label class="drop-zone">
+        <input class="file-input" type="file" multiple>
+        <span class="drop-title">Drop files or webpage images here</span>
+        <span class="drop-copy">or click to browse your computer</span>
+      </label>
+
+      <div class="file-section">
+        <div class="file-section-head">
+          <span>Files</span>
+          <span class="file-section-hint">Stored locally</span>
+        </div>
+        <div class="file-list"></div>
+      </div>
+    </article>
+  </template>
+
+  <template id="file-template">
+    <div class="file-row">
+      <div class="file-icon" aria-hidden="true"><span></span></div>
+      <div class="file-copy">
+        <strong class="file-name"></strong>
+        <span class="file-meta"></span>
+      </div>
+      <div class="file-actions">
+        <button class="button button-file use-file" type="button">Use</button>
+        <button class="button button-file download-file" type="button">Download</button>
+        <button class="button button-file button-file-danger delete-file" type="button">Delete</button>
+      </div>
+    </div>
+  </template>
+
+  <template id="file-empty-template">
+    <div class="file-empty">No files in this box yet.</div>
+  </template>
+
+  <script type="module" src="popup.js"></script>
+  <script type="module" src="conversion-ui.js"></script>
+  <script type="module" src="lifecycle-ui.js"></script>
+  <script type="module" src="qol-ui-v2.js"></script>
+  <script type="module" src="safety-ui.js"></script>
+</body>
+</html>

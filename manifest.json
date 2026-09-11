@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "BoxIt",
+  "version": "0.1.0",
+  "description": "Keep temporary upload files in local browser boxes instead of cluttering Downloads.",
+  "permissions": ["storage", "activeTab", "scripting", "clipboardRead", "contextMenus", "alarms"],
+  "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "BoxIt"
+  },
+  "background": {
+    "service_worker": "background-v2.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["transfer-content.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
