@@ -260,7 +260,13 @@ async function openPreview(fileId) {
   } else {
     const meta = document.createElement('div');
     meta.className = 'qol-preview-meta';
-    meta.innerHTML = `<strong>${record.name}</strong><span>${formatBytes(record.size)}</span><span>${record.type || 'Unknown type'}</span>`;
+    const name = document.createElement('strong');
+    const size = document.createElement('span');
+    const mime = document.createElement('span');
+    name.textContent = record.name;
+    size.textContent = formatBytes(record.size);
+    mime.textContent = record.type || 'Unknown type';
+    meta.append(name, size, mime);
     body.append(meta);
   }
 
@@ -384,11 +390,15 @@ function syncActionButtons(card, box, files) {
   }
 }
 
+function rankMap(items, compare) {
+  const sorted = [...items].sort(compare);
+  return new Map(sorted.map((item, index) => [item.id, index]));
+}
+
 function applyViewState() {
   const search = String(document.querySelector('#qol-search')?.value || '').trim().toLowerCase();
   const sort = document.querySelector('#qol-sort')?.value || 'default';
   const filesByBox = recordsByBox(state.files);
-  const boxById = new Map(state.boxes.map(box => [box.id, box]));
   let visibleBoxes = 0;
 
   const boxTotals = new Map();
@@ -396,18 +406,23 @@ function applyViewState() {
     boxTotals.set(box.id, (filesByBox.get(box.id) || []).reduce((sum, file) => sum + Number(file.size || 0), 0));
   }
 
+  let boxRanks = new Map(state.boxes.map((box, index) => [box.id, index]));
+  if (sort === 'recent') boxRanks = rankMap(state.boxes, (a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+  if (sort === 'name') boxRanks = rankMap(state.boxes, (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  if (sort === 'size') boxRanks = rankMap(state.boxes, (a, b) => Number(boxTotals.get(b.id) || 0) - Number(boxTotals.get(a.id) || 0));
+
   const cards = [...boxesEl.querySelectorAll('.box-card')];
   for (let index = 0; index < Math.min(cards.length, state.boxes.length); index += 1) {
     const card = cards[index];
     const box = state.boxes[index];
     const files = filesByBox.get(box.id) || [];
     card.dataset.qolBoxId = box.id;
+    card.style.order = String(boxRanks.get(box.id) ?? index);
 
-    let boxOrder = index;
-    if (sort === 'recent') boxOrder = -Number(box.createdAt || 0);
-    if (sort === 'name') boxOrder = box.name.toLowerCase().charCodeAt(0) * 100000 + index;
-    if (sort === 'size') boxOrder = -Number(boxTotals.get(box.id) || 0);
-    card.style.order = String(boxOrder);
+    let fileRanks = new Map(files.map((file, fileIndex) => [file.id, fileIndex]));
+    if (sort === 'recent') fileRanks = rankMap(files, (a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+    if (sort === 'name') fileRanks = rankMap(files, (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+    if (sort === 'size') fileRanks = rankMap(files, (a, b) => Number(b.size || 0) - Number(a.size || 0));
 
     const boxMatches = !search || box.name.toLowerCase().includes(search);
     let matchingFiles = 0;
@@ -419,12 +434,7 @@ function applyViewState() {
       const visible = boxMatches || fileMatches;
       row.classList.toggle('hidden', !visible);
       if (visible) matchingFiles += 1;
-
-      let fileOrder = fileIndex;
-      if (sort === 'recent') fileOrder = -Number(file.createdAt || 0);
-      if (sort === 'name') fileOrder = file.name.toLowerCase().charCodeAt(0) * 100000 + fileIndex;
-      if (sort === 'size') fileOrder = -Number(file.size || 0);
-      row.style.order = String(fileOrder);
+      row.style.order = String(fileRanks.get(file.id) ?? fileIndex);
     }
 
     const shouldShow = boxMatches || matchingFiles > 0;
@@ -437,13 +447,10 @@ function applyViewState() {
 
 async function updateSummary() {
   const totalBytes = state.files.reduce((sum, file) => sum + Number(file.size || 0), 0);
-  const duplicateGroups = new Set();
   let redundantFiles = 0;
 
   for (const [fileId, group] of state.duplicates) {
     if (!group?.length) continue;
-    const key = group.map(file => file.id).sort().join(':');
-    duplicateGroups.add(key);
     const oldest = [...group].sort((a, b) => a.createdAt - b.createdAt)[0];
     if (fileId !== oldest.id) redundantFiles += 1;
   }
@@ -468,13 +475,11 @@ async function updateSummary() {
 }
 
 async function removeDuplicates() {
-  const keep = new Set();
   const remove = new Set();
 
   for (const group of state.duplicates.values()) {
     if (!group?.length) continue;
     const sorted = [...group].sort((a, b) => a.createdAt - b.createdAt);
-    keep.add(sorted[0].id);
     for (const file of sorted.slice(1)) remove.add(file.id);
   }
 
