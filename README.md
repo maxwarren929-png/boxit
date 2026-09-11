@@ -26,7 +26,7 @@ Instead of keeping temporary upload files scattered through Downloads, BoxIt sto
 
 ## Quality of life
 
-The popup includes a global search field and visual sort control. `Ctrl/Cmd+K` or `/` focuses search without touching the current box/file order stored in IndexedDB.
+The popup includes a global search field and visual sort control. `Ctrl/Cmd+K` or `/` focuses search without changing the stored order in IndexedDB.
 
 Rename controls are available for both boxes and files. Supported files can be previewed locally:
 
