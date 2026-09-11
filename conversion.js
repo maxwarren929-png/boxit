@@ -4,6 +4,20 @@ const IMAGE_OUTPUTS = {
   webp: { mime: 'image/webp', extension: 'webp', label: 'WebP' }
 };
 
+const IMAGE_INPUT_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/svg+xml',
+  'image/bmp',
+  'image/avif'
+]);
+
+const IMAGE_INPUT_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp', 'svg', 'bmp', 'avif']);
+const MAX_CANVAS_DIMENSION = 16384;
+const MAX_CANVAS_PIXELS = 80_000_000;
+const MAX_TEXT_CONVERSION_BYTES = 20 * 1024 * 1024;
+
 function extensionOf(name) {
   const match = String(name || '').toLowerCase().match(/\.([a-z0-9]+)$/);
   return match?.[1] || '';
@@ -16,7 +30,7 @@ function baseName(name) {
 function imageLike(record) {
   const type = String(record?.type || '').toLowerCase();
   const extension = extensionOf(record?.name);
-  return type.startsWith('image/') || ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp'].includes(extension);
+  return IMAGE_INPUT_TYPES.has(type) || IMAGE_INPUT_EXTENSIONS.has(extension);
 }
 
 function jsonLike(record) {
@@ -85,9 +99,17 @@ function imageFromBlob(blob) {
 function containedSize(width, height, maxWidth, maxHeight) {
   const safeWidth = Math.max(1, Number(width) || 1);
   const safeHeight = Math.max(1, Number(height) || 1);
-  const widthLimit = Number(maxWidth) > 0 ? Number(maxWidth) : safeWidth;
-  const heightLimit = Number(maxHeight) > 0 ? Number(maxHeight) : safeHeight;
-  const scale = Math.min(1, widthLimit / safeWidth, heightLimit / safeHeight);
+  const requestedWidth = Number(maxWidth) > 0 ? Number(maxWidth) : safeWidth;
+  const requestedHeight = Number(maxHeight) > 0 ? Number(maxHeight) : safeHeight;
+  const widthLimit = Math.min(requestedWidth, MAX_CANVAS_DIMENSION);
+  const heightLimit = Math.min(requestedHeight, MAX_CANVAS_DIMENSION);
+  let scale = Math.min(1, widthLimit / safeWidth, heightLimit / safeHeight);
+
+  const scaledPixels = safeWidth * safeHeight * scale * scale;
+  if (scaledPixels > MAX_CANVAS_PIXELS) {
+    scale *= Math.sqrt(MAX_CANVAS_PIXELS / scaledPixels);
+  }
+
   return {
     width: Math.max(1, Math.round(safeWidth * scale)),
     height: Math.max(1, Math.round(safeHeight * scale))
@@ -101,6 +123,12 @@ function canvasBlob(canvas, mime, quality) {
       else reject(new Error('The browser could not encode the converted image.'));
     }, mime, quality);
   });
+}
+
+function assertTextSize(record) {
+  if (Number(record?.size || 0) > MAX_TEXT_CONVERSION_BYTES) {
+    throw new Error('JSON/CSV conversion is limited to 20 MB in this MVP.');
+  }
 }
 
 export async function imageDimensions(blob) {
@@ -244,6 +272,7 @@ function jsonArrayToCsv(value) {
 }
 
 export async function convertJsonToCsv(record) {
+  assertTextSize(record);
   let parsed;
   try {
     parsed = JSON.parse(await record.blob.text());
@@ -260,6 +289,7 @@ export async function convertJsonToCsv(record) {
 }
 
 export async function convertCsvToJson(record) {
+  assertTextSize(record);
   const rows = parseCsv(await record.blob.text());
   if (!rows.length) {
     return {
