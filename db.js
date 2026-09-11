@@ -45,6 +45,21 @@ async function withStore(name, mode, fn) {
   });
 }
 
+function normalizeLifecycle(value = {}) {
+  const mode = ['persistent', 'expires', 'session'].includes(value.mode)
+    ? value.mode
+    : 'persistent';
+  const expiresAt = mode === 'expires' && Number(value.expiresAt) > Date.now()
+    ? Number(value.expiresAt)
+    : null;
+
+  return {
+    mode: mode === 'expires' && !expiresAt ? 'persistent' : mode,
+    expiresAt,
+    deleteAfterUse: Boolean(value.deleteAfterUse)
+  };
+}
+
 function fileRecord(boxId, blob, name, lastModified = Date.now(), source = 'local') {
   return {
     id: crypto.randomUUID(),
@@ -82,14 +97,44 @@ export async function getBox(boxId) {
   });
 }
 
-export async function createBox(name) {
+export async function createBox(name, options = {}) {
   const box = {
     id: crypto.randomUUID(),
     name: name.trim() || 'Untitled box',
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    lifecycle: normalizeLifecycle(options.lifecycle)
   };
   await withStore(BOX_STORE, 'readwrite', store => store.add(box));
   return box;
+}
+
+export async function updateBoxLifecycle(boxId, lifecycle) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(BOX_STORE, 'readwrite');
+    const store = tx.objectStore(BOX_STORE);
+    const request = store.get(boxId);
+    let updated = null;
+
+    request.onsuccess = () => {
+      const box = request.result;
+      if (!box) return;
+      updated = {
+        ...box,
+        lifecycle: normalizeLifecycle(lifecycle)
+      };
+      store.put(updated);
+    };
+    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => {
+      db.close();
+      resolve(updated);
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error);
+    };
+  });
 }
 
 export async function findBoxByName(name) {
@@ -120,6 +165,25 @@ export async function deleteBox(boxId) {
       reject(tx.error);
     };
   });
+}
+
+export async function deleteExpiredBoxes(now = Date.now()) {
+  const boxes = await listBoxes();
+  const expired = boxes.filter(box => (
+    box.lifecycle?.mode === 'expires' &&
+    Number(box.lifecycle.expiresAt) > 0 &&
+    Number(box.lifecycle.expiresAt) <= now
+  ));
+
+  for (const box of expired) await deleteBox(box.id);
+  return expired;
+}
+
+export async function deleteSessionBoxes() {
+  const boxes = await listBoxes();
+  const sessionBoxes = boxes.filter(box => box.lifecycle?.mode === 'session');
+  for (const box of sessionBoxes) await deleteBox(box.id);
+  return sessionBoxes;
 }
 
 export async function addFiles(boxId, files) {
