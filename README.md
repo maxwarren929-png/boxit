@@ -31,7 +31,7 @@ The page drop zone also accepts local files and supported webpage image/file URL
 
 ## File conversion
 
-Supported files get a **Convert** action in their file row. Conversion always creates a new file in the same box and leaves the original untouched.
+Supported files get a **Convert** action in their file row. Conversion always creates a new local file in the same box and leaves the original untouched.
 
 Current converters:
 
