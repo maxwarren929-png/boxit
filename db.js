@@ -45,12 +45,38 @@ async function withStore(name, mode, fn) {
   });
 }
 
+function fileRecord(boxId, blob, name, lastModified = Date.now(), source = 'local') {
+  return {
+    id: crypto.randomUUID(),
+    boxId,
+    name,
+    type: blob.type || 'application/octet-stream',
+    size: blob.size,
+    lastModified,
+    blob,
+    source,
+    createdAt: Date.now()
+  };
+}
+
 export async function listBoxes() {
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(BOX_STORE, 'readonly');
     const request = tx.objectStore(BOX_STORE).getAll();
     request.onsuccess = () => resolve(request.result.sort((a, b) => a.createdAt - b.createdAt));
+    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => db.close();
+  });
+}
+
+export async function getBox(boxId) {
+  if (!boxId) return null;
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(BOX_STORE, 'readonly');
+    const request = tx.objectStore(BOX_STORE).get(boxId);
+    request.onsuccess = () => resolve(request.result || null);
     request.onerror = () => reject(request.error);
     tx.oncomplete = () => db.close();
   });
@@ -64,6 +90,12 @@ export async function createBox(name) {
   };
   await withStore(BOX_STORE, 'readwrite', store => store.add(box));
   return box;
+}
+
+export async function findBoxByName(name) {
+  const boxes = await listBoxes();
+  const normalized = String(name || '').trim().toLowerCase();
+  return boxes.find(box => box.name.trim().toLowerCase() === normalized) || null;
 }
 
 export async function deleteBox(boxId) {
@@ -91,16 +123,13 @@ export async function deleteBox(boxId) {
 }
 
 export async function addFiles(boxId, files) {
-  const records = [...files].map(file => ({
-    id: crypto.randomUUID(),
+  const records = [...files].map(file => fileRecord(
     boxId,
-    name: file.name,
-    type: file.type || 'application/octet-stream',
-    size: file.size,
-    lastModified: file.lastModified,
-    blob: file,
-    createdAt: Date.now()
-  }));
+    file,
+    file.name,
+    file.lastModified,
+    'local'
+  ));
   const db = await openDb();
   await new Promise((resolve, reject) => {
     const tx = db.transaction(FILE_STORE, 'readwrite');
@@ -111,6 +140,21 @@ export async function addFiles(boxId, files) {
   });
   db.close();
   return records;
+}
+
+export async function addBlob(boxId, blob, name, options = {}) {
+  if (!boxId) throw new Error('A destination box is required.');
+  if (!(blob instanceof Blob)) throw new Error('Captured content is not a valid file.');
+
+  const record = fileRecord(
+    boxId,
+    blob,
+    String(name || 'capture').trim() || 'capture',
+    options.lastModified || Date.now(),
+    options.source || 'capture'
+  );
+  await withStore(FILE_STORE, 'readwrite', store => store.add(record));
+  return record;
 }
 
 export async function listFiles(boxId) {
