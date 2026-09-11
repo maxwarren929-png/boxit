@@ -67,9 +67,15 @@ function uniqueHeaders(headers) {
   });
 }
 
+function maxRowWidth(rows) {
+  let width = 0;
+  for (const row of rows) width = Math.max(width, row.length);
+  return width;
+}
+
 function rowsToObjects(rows, firstRowHeaders) {
   if (!rows.length) return [];
-  const width = Math.max(...rows.map(row => row.length), 0);
+  const width = maxRowWidth(rows);
   const headers = firstRowHeaders
     ? uniqueHeaders(rows[0])
     : Array.from({ length: width }, (_, index) => `column_${index + 1}`);
@@ -133,7 +139,7 @@ function tableShape(items) {
 
   const arrayRows = items.every(Array.isArray);
   if (arrayRows) {
-    const width = Math.max(...items.map(row => row.length), 0);
+    const width = maxRowWidth(items);
     return {
       headers: Array.from({ length: width }, (_, index) => `column_${index + 1}`),
       rows: items
