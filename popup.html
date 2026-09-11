@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BoxIt</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <p class="eyebrow">BOXIT</p>
+        <h1>Your files, without the clutter.</h1>
+      </div>
+      <button id="new-box" class="primary">New box</button>
+    </header>
+
+    <section id="empty" class="empty hidden">
+      <p>No boxes yet.</p>
+      <button id="empty-new-box">Create your first box</button>
+    </section>
+
+    <section id="boxes" class="boxes"></section>
+  </main>
+
+  <template id="box-template">
+    <article class="box-card">
+      <div class="box-head">
+        <div>
+          <h2 class="box-name"></h2>
+          <p class="box-meta"></p>
+        </div>
+        <button class="delete-box" title="Delete box">×</button>
+      </div>
+      <label class="drop-zone">
+        <input class="file-input" type="file" multiple>
+        <span>Drop files here or click to add</span>
+      </label>
+      <div class="file-list"></div>
+    </article>
+  </template>
+
+  <template id="file-template">
+    <div class="file-row">
+      <div class="file-copy">
+        <strong class="file-name"></strong>
+        <span class="file-meta"></span>
+      </div>
+      <div class="file-actions">
+        <button class="use-file" title="Use on current page">Use</button>
+        <button class="download-file" title="Download">↓</button>
+        <button class="delete-file" title="Delete">×</button>
+      </div>
+    </div>
+  </template>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
