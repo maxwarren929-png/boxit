@@ -53,6 +53,9 @@
 
 .convert-image-options,
 .convert-data-options,
+.convert-document-options,
+.convert-media-options,
+.convert-media-video,
 .convert-v2-options {
   display: grid;
   gap: 12px;
@@ -171,6 +174,9 @@
 
 .convert-image-options.hidden,
 .convert-data-options.hidden,
+.convert-document-options.hidden,
+.convert-media-options.hidden,
+.convert-media-video.hidden,
 .convert-field.hidden,
 .convert-toggle-row.hidden {
   display: none !important;
