@@ -2,6 +2,7 @@ import { extensionOf, outputName } from './conversion-utils.js';
 
 const MAX_CANVAS_DIMENSION = 16384;
 const MAX_CANVAS_PIXELS = 80_000_000;
+const MAX_BMP_PIXELS = 25_000_000;
 
 const INPUT_TYPES = new Set([
   'image/png',
@@ -158,9 +159,13 @@ async function convertImage(record, options = {}) {
     const rotated = rotation === 90 || rotation === 270;
     const canvasWidth = rotated ? drawSize.height : drawSize.width;
     const canvasHeight = rotated ? drawSize.width : drawSize.height;
+    const outputPixels = canvasWidth * canvasHeight;
 
-    if (canvasWidth * canvasHeight > MAX_CANVAS_PIXELS) {
+    if (outputPixels > MAX_CANVAS_PIXELS) {
       throw new Error('The converted image would be too large for the browser canvas.');
+    }
+    if (target.value === 'bmp' && outputPixels > MAX_BMP_PIXELS) {
+      throw new Error('BMP output is limited to 25 million pixels because uncompressed encoding uses much more memory.');
     }
 
     const canvas = document.createElement('canvas');
