@@ -1,4 +1,16 @@
-import { listBoxes, createBox, deleteBox, addFiles, listFiles, getFile, deleteFile } from './db.js';
+import {
+  listBoxes,
+  createBox,
+  deleteBox,
+  addFiles,
+  addBlob,
+  listFiles,
+  getFile,
+  deleteFile
+} from './db.js';
+
+const CAPTURE_BOX_KEY = 'boxitCaptureBoxId';
+const LAST_CAPTURE_KEY = 'boxitLastCapture';
 
 const boxesEl = document.querySelector('#boxes');
 const emptyEl = document.querySelector('#empty');
@@ -49,6 +61,14 @@ newBoxForm.addEventListener('submit', async event => {
   await render();
 });
 
+chrome.runtime.onMessage.addListener(message => {
+  if (message?.type !== 'BOXIT_CAPTURE_SAVED' || !message.capture) return;
+  const capture = message.capture;
+  showStatus(`Saved ${capture.fileName} to ${capture.boxName}.`, 'success');
+  render();
+  chrome.runtime.sendMessage({ type: 'BOXIT_CLEAR_CAPTURE_BADGE' }).catch(() => {});
+});
+
 function openNewBoxDialog() {
   newBoxForm.reset();
   newBoxDialog.showModal();
@@ -83,6 +103,29 @@ function formatFileType(type) {
   const subtype = type.split('/')[1];
   if (!subtype) return type;
   return subtype.replace('vnd.openxmlformats-officedocument.', '').toUpperCase();
+}
+
+function extensionForType(type) {
+  const known = {
+    'image/png': 'png',
+    'image/jpeg': 'jpg',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+    'image/svg+xml': 'svg'
+  };
+  return known[String(type || '').toLowerCase()] || 'img';
+}
+
+function timestampForName() {
+  return new Date().toISOString().replace(/[:.]/g, '-');
+}
+
+function safeHost(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '').replace(/[^a-z0-9.-]+/gi, '-').slice(0, 48) || 'page';
+  } catch {
+    return 'page';
+  }
 }
 
 function fileMetadata(record) {
@@ -257,8 +300,111 @@ async function beginUse(record, button) {
   }
 }
 
+async function captureBoxId() {
+  const stored = await chrome.storage.local.get(CAPTURE_BOX_KEY);
+  return stored[CAPTURE_BOX_KEY] || null;
+}
+
+async function setCaptureBox(box) {
+  await chrome.storage.local.set({ [CAPTURE_BOX_KEY]: box.id });
+  showStatus(`Right-click captures will now save to ${box.name}.`, 'success');
+  await render();
+}
+
+async function pasteImage(box, button) {
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Reading...';
+
+  try {
+    const items = await navigator.clipboard.read();
+    const images = [];
+
+    for (const item of items) {
+      const type = item.types.find(candidate => candidate.startsWith('image/'));
+      if (!type) continue;
+      images.push({ type, blob: await item.getType(type) });
+    }
+
+    if (!images.length) throw new Error('There is no image in the clipboard.');
+
+    for (let index = 0; index < images.length; index += 1) {
+      const image = images[index];
+      const suffix = images.length > 1 ? `-${index + 1}` : '';
+      const name = `clipboard-${timestampForName()}${suffix}.${extensionForType(image.type)}`;
+      await addBlob(box.id, image.blob, name, { source: 'clipboard' });
+    }
+
+    showStatus(`Saved ${images.length === 1 ? 'clipboard image' : `${images.length} clipboard images`} to ${box.name}.`, 'success');
+    await render();
+  } catch (error) {
+    showStatus(error?.message || 'BoxIt could not read an image from the clipboard.', 'error', 7000);
+  } finally {
+    if (button.isConnected) {
+      button.disabled = false;
+      button.textContent = original;
+    }
+  }
+}
+
+async function captureScreenshot(box, button) {
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Capturing...';
+
+  try {
+    const tab = await activeTab();
+    const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
+    const blob = await (await fetch(dataUrl)).blob();
+    const name = `screenshot-${safeHost(tab.url)}-${timestampForName()}.png`;
+    await addBlob(box.id, blob, name, { source: 'screenshot' });
+    showStatus(`Saved a screenshot to ${box.name}.`, 'success');
+    await render();
+  } catch (error) {
+    showStatus(error?.message || 'BoxIt could not capture this tab.', 'error', 7000);
+  } finally {
+    if (button.isConnected) {
+      button.disabled = false;
+      button.textContent = original;
+    }
+  }
+}
+
+function remoteUrlFromDrop(dataTransfer) {
+  const uriList = dataTransfer.getData('text/uri-list');
+  if (uriList) {
+    const url = uriList.split(/\r?\n/).find(line => line && !line.startsWith('#'));
+    if (/^https?:\/\//i.test(url || '')) return url;
+  }
+
+  const html = dataTransfer.getData('text/html');
+  if (html) {
+    const parsed = new DOMParser().parseFromString(html, 'text/html');
+    const source = parsed.querySelector('img[src]')?.src || parsed.querySelector('a[href]')?.href;
+    if (/^https?:\/\//i.test(source || '')) return source;
+  }
+
+  const plain = dataTransfer.getData('text/plain').trim();
+  if (/^https?:\/\//i.test(plain)) return plain;
+  return null;
+}
+
+async function captureRemoteDrop(box, url) {
+  showStatus(`Saving webpage content to ${box.name}...`, 'neutral', 0);
+  const response = await chrome.runtime.sendMessage({
+    type: 'BOXIT_CAPTURE_REMOTE_URL',
+    boxId: box.id,
+    url,
+    source: 'web-drop'
+  });
+
+  if (!response?.ok) throw new Error(response?.error || 'BoxIt could not save that webpage item.');
+  showStatus(`Saved ${response.capture.fileName} to ${box.name}.`, 'success');
+  await render();
+}
+
 async function render() {
-  const boxes = await listBoxes();
+  const [boxes, defaultCaptureBoxId] = await Promise.all([listBoxes(), captureBoxId()]);
   boxesEl.replaceChildren();
   emptyEl.classList.toggle('hidden', boxes.length > 0);
 
@@ -267,13 +413,25 @@ async function render() {
     const input = node.querySelector('.file-input');
     const drop = node.querySelector('.drop-zone');
     const files = await listFiles(box.id);
+    const isCaptureDefault = defaultCaptureBoxId === box.id;
 
     node.querySelector('.box-name').textContent = box.name;
     node.querySelector('.box-meta').textContent = `${files.length} file${files.length === 1 ? '' : 's'}`;
+    node.querySelector('.capture-default-tag').classList.toggle('hidden', !isCaptureDefault);
+
+    const captureHereButton = node.querySelector('.set-capture-box');
+    captureHereButton.dataset.active = String(isCaptureDefault);
+    captureHereButton.textContent = isCaptureDefault ? 'Capture default' : 'Capture here';
+    captureHereButton.disabled = isCaptureDefault;
+    captureHereButton.addEventListener('click', () => setCaptureBox(box));
+
+    node.querySelector('.paste-image').addEventListener('click', event => pasteImage(box, event.currentTarget));
+    node.querySelector('.capture-screenshot').addEventListener('click', event => captureScreenshot(box, event.currentTarget));
 
     node.querySelector('.delete-box').addEventListener('click', async () => {
       if (!confirm(`Delete “${box.name}” and everything inside it?`)) return;
       await deleteBox(box.id);
+      if (isCaptureDefault) await chrome.storage.local.remove(CAPTURE_BOX_KEY);
       await render();
     });
 
@@ -297,8 +455,20 @@ async function render() {
     }
 
     drop.addEventListener('drop', async event => {
-      if (event.dataTransfer.files.length) await addFiles(box.id, event.dataTransfer.files);
-      await render();
+      try {
+        if (event.dataTransfer.files.length) {
+          await addFiles(box.id, event.dataTransfer.files);
+          showStatus(`Added ${event.dataTransfer.files.length} file${event.dataTransfer.files.length === 1 ? '' : 's'} to ${box.name}.`, 'success');
+          await render();
+          return;
+        }
+
+        const url = remoteUrlFromDrop(event.dataTransfer);
+        if (!url) throw new Error('BoxIt could not find a file or webpage image in that drop.');
+        await captureRemoteDrop(box, url);
+      } catch (error) {
+        showStatus(error?.message || 'BoxIt could not capture that drop.', 'error', 7000);
+      }
     });
 
     const list = node.querySelector('.file-list');
@@ -345,4 +515,23 @@ async function fileRow(record) {
   return row;
 }
 
-render();
+async function showRecentCapture() {
+  const stored = await chrome.storage.local.get(LAST_CAPTURE_KEY);
+  const capture = stored[LAST_CAPTURE_KEY];
+  if (!capture) return;
+
+  const recent = Date.now() - Number(capture.capturedAt || 0) < 30000;
+  if (recent) {
+    if (capture.error) showStatus(capture.error, 'error', 7000);
+    else if (capture.fileName && capture.boxName) showStatus(`Saved ${capture.fileName} to ${capture.boxName}.`, 'success');
+  }
+  await chrome.storage.local.remove(LAST_CAPTURE_KEY);
+}
+
+async function init() {
+  await showRecentCapture();
+  await render();
+  chrome.runtime.sendMessage({ type: 'BOXIT_CLEAR_CAPTURE_BADGE' }).catch(() => {});
+}
+
+init();
