@@ -287,7 +287,7 @@ async function digestRecord(record) {
 async function findDuplicates(files) {
   const candidates = new Map();
   for (const file of files) {
-    if (!file.size || file.size > MAX_AUTO_HASH_BYTES) continue;
+    if (file.size > MAX_AUTO_HASH_BYTES) continue;
     const key = `${file.boxId}:${file.size}`;
     const group = candidates.get(key) || [];
     group.push(file);
