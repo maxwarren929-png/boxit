@@ -1,8 +1,18 @@
-import { addBlob, createBox, findBoxByName, getBox } from './db.js';
+import {
+  addBlob,
+  createBox,
+  findBoxByName,
+  getBox,
+  listBoxes,
+  deleteBox,
+  deleteExpiredBoxes,
+  deleteSessionBoxes
+} from './db.js';
 
 const CAPTURE_BOX_KEY = 'boxitCaptureBoxId';
 const LAST_CAPTURE_KEY = 'boxitLastCapture';
 const MAX_REMOTE_CAPTURE_BYTES = 100 * 1024 * 1024;
+const EXPIRY_ALARM_PREFIX = 'boxit-expire:';
 
 function createContextMenus() {
   chrome.contextMenus.removeAll(() => {
@@ -19,9 +29,86 @@ function createContextMenus() {
   });
 }
 
+async function clearCaptureDefaultIfNeeded(boxId) {
+  const stored = await chrome.storage.local.get(CAPTURE_BOX_KEY);
+  if (stored[CAPTURE_BOX_KEY] === boxId) {
+    await chrome.storage.local.remove(CAPTURE_BOX_KEY);
+  }
+}
+
+async function deleteLifecycleBox(boxId, reason = 'expired') {
+  const box = await getBox(boxId);
+  if (!box) return null;
+
+  await deleteBox(boxId);
+  await clearCaptureDefaultIfNeeded(boxId);
+  await chrome.alarms.clear(`${EXPIRY_ALARM_PREFIX}${boxId}`);
+
+  try {
+    await chrome.runtime.sendMessage({
+      type: 'BOXIT_BOX_REMOVED',
+      boxId,
+      boxName: box.name,
+      reason
+    });
+  } catch {
+    // The popup is usually closed when lifecycle cleanup runs.
+  }
+
+  return box;
+}
+
+async function scheduleBoxExpiry(box) {
+  const alarmName = `${EXPIRY_ALARM_PREFIX}${box.id}`;
+  await chrome.alarms.clear(alarmName);
+
+  if (box.lifecycle?.mode !== 'expires') return;
+  const expiresAt = Number(box.lifecycle.expiresAt || 0);
+  if (!expiresAt) return;
+
+  if (expiresAt <= Date.now()) {
+    await deleteLifecycleBox(box.id, 'expired');
+    return;
+  }
+
+  chrome.alarms.create(alarmName, { when: expiresAt });
+}
+
+async function scheduleAllExpirations() {
+  const alarms = await chrome.alarms.getAll();
+  await Promise.all(
+    alarms
+      .filter(alarm => alarm.name.startsWith(EXPIRY_ALARM_PREFIX))
+      .map(alarm => chrome.alarms.clear(alarm.name))
+  );
+
+  const expired = await deleteExpiredBoxes();
+  for (const box of expired) await clearCaptureDefaultIfNeeded(box.id);
+
+  const boxes = await listBoxes();
+  for (const box of boxes) await scheduleBoxExpiry(box);
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   createContextMenus();
+  scheduleAllExpirations().catch(console.error);
 });
+
+chrome.runtime.onStartup.addListener(() => {
+  (async () => {
+    const removed = await deleteSessionBoxes();
+    for (const box of removed) await clearCaptureDefaultIfNeeded(box.id);
+    await scheduleAllExpirations();
+  })().catch(console.error);
+});
+
+chrome.alarms.onAlarm.addListener(alarm => {
+  if (!alarm.name.startsWith(EXPIRY_ALARM_PREFIX)) return;
+  const boxId = alarm.name.slice(EXPIRY_ALARM_PREFIX.length);
+  deleteLifecycleBox(boxId, 'expired').catch(console.error);
+});
+
+scheduleAllExpirations().catch(console.error);
 
 async function preferredCaptureBox(explicitBoxId = null) {
   if (explicitBoxId) {
@@ -233,5 +320,26 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === 'BOXIT_CLEAR_CAPTURE_BADGE') {
     chrome.action.setBadgeText({ text: '' });
     sendResponse({ ok: true });
+    return;
+  }
+
+  if (message?.type === 'BOXIT_LIFECYCLE_CHANGED') {
+    getBox(message.boxId)
+      .then(box => box ? scheduleBoxExpiry(box) : null)
+      .then(() => sendResponse({ ok: true }))
+      .catch(error => sendResponse({ ok: false, error: error?.message || 'Could not schedule box expiry.' }));
+    return true;
+  }
+
+  if (message?.type === 'BOXIT_COMPLETE_ONE_SHOT') {
+    getBox(message.boxId)
+      .then(async box => {
+        if (!box?.lifecycle?.deleteAfterUse) return { deleted: false };
+        await deleteLifecycleBox(box.id, 'used');
+        return { deleted: true, boxName: box.name };
+      })
+      .then(result => sendResponse({ ok: true, ...result }))
+      .catch(error => sendResponse({ ok: false, error: error?.message || 'Could not delete one-shot box.' }));
+    return true;
   }
 });
