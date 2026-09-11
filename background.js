@@ -94,6 +94,83 @@ function nameFromUrl(url, type, headers) {
   return `capture-${new Date().toISOString().replace(/[:.]/g, '-')}${suffix}`;
 }
 
+function isMissingReceiver(error) {
+  const message = String(error?.message || error || '');
+  return message.includes('Receiving end does not exist') || message.includes('Could not establish connection');
+}
+
+async function sendPageMessage(tabId, message) {
+  try {
+    const response = await chrome.tabs.sendMessage(tabId, message);
+    if (response !== undefined) return response;
+  } catch (error) {
+    if (!isMissingReceiver(error)) throw error;
+  }
+
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ['content.js']
+  });
+
+  const response = await chrome.tabs.sendMessage(tabId, message);
+  if (response === undefined) throw new Error('BoxIt could not connect to this page.');
+  return response;
+}
+
+async function fetchFromPage(tabId, url) {
+  const response = await sendPageMessage(tabId, {
+    type: 'BOXIT_FETCH_PAGE_RESOURCE',
+    url
+  });
+  if (!response?.ok || !response.resource) {
+    throw new Error(response?.error || 'The page could not provide this resource.');
+  }
+
+  const resource = response.resource;
+  return {
+    blob: new Blob([new Uint8Array(resource.bytes)], { type: resource.type || 'application/octet-stream' }),
+    url: resource.url || url,
+    headers: null
+  };
+}
+
+async function fetchRemoteResource(url, pageTabId = null) {
+  let directError = null;
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Could not fetch this file (${response.status}).`);
+
+    const contentLength = Number(response.headers.get('content-length') || 0);
+    if (contentLength > MAX_REMOTE_CAPTURE_BYTES) {
+      throw new Error('This file is larger than BoxIt can capture right now.');
+    }
+
+    const blob = await response.blob();
+    if (blob.size > MAX_REMOTE_CAPTURE_BYTES) {
+      throw new Error('This file is larger than BoxIt can capture right now.');
+    }
+
+    return {
+      blob,
+      url: response.url || url,
+      headers: response.headers
+    };
+  } catch (error) {
+    directError = error;
+  }
+
+  if (pageTabId) {
+    try {
+      return await fetchFromPage(pageTabId, url);
+    } catch {
+      // Keep the direct fetch error because it normally contains the clearer cause.
+    }
+  }
+
+  throw directError || new Error('BoxIt could not fetch this file.');
+}
+
 async function publishCapture(record, box) {
   const event = {
     fileId: record.id,
@@ -115,35 +192,23 @@ async function publishCapture(record, box) {
   return event;
 }
 
-async function saveRemoteUrl(url, source = 'web', explicitBoxId = null) {
+async function saveRemoteUrl(url, source = 'web', explicitBoxId = null, pageTabId = null) {
   if (!url) throw new Error('No capture URL was provided.');
 
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Could not fetch this file (${response.status}).`);
-
-  const contentLength = Number(response.headers.get('content-length') || 0);
-  if (contentLength > MAX_REMOTE_CAPTURE_BYTES) {
-    throw new Error('This file is larger than BoxIt can capture right now.');
-  }
-
-  const blob = await response.blob();
-  if (blob.size > MAX_REMOTE_CAPTURE_BYTES) {
-    throw new Error('This file is larger than BoxIt can capture right now.');
-  }
-
+  const resource = await fetchRemoteResource(url, pageTabId);
   const box = await preferredCaptureBox(explicitBoxId);
-  const name = nameFromUrl(response.url || url, blob.type, response.headers);
-  const record = await addBlob(box.id, blob, name, { source });
+  const name = nameFromUrl(resource.url || url, resource.blob.type, resource.headers);
+  const record = await addBlob(box.id, resource.blob, name, { source });
   const capture = await publishCapture(record, box);
   return { record, box, capture };
 }
 
-chrome.contextMenus.onClicked.addListener(async info => {
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   try {
     if (info.menuItemId === 'boxit-save-image') {
-      await saveRemoteUrl(info.srcUrl, 'context-image');
+      await saveRemoteUrl(info.srcUrl, 'context-image', null, tab?.id || null);
     } else if (info.menuItemId === 'boxit-save-link') {
-      await saveRemoteUrl(info.linkUrl, 'context-link');
+      await saveRemoteUrl(info.linkUrl, 'context-link', null, tab?.id || null);
     }
   } catch (error) {
     const message = error?.message || 'BoxIt could not save that item.';
