@@ -3,7 +3,7 @@
   "name": "BoxIt",
   "version": "0.1.0",
   "description": "Keep temporary upload files in local browser boxes instead of cluttering Downloads.",
-  "permissions": ["storage", "activeTab", "scripting", "clipboardRead", "contextMenus"],
+  "permissions": ["storage", "activeTab", "scripting", "clipboardRead", "contextMenus", "alarms"],
   "host_permissions": ["<all_urls>"],
   "action": {
     "default_popup": "popup.html",
