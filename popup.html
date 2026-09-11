@@ -6,6 +6,7 @@
   <title>BoxIt</title>
   <link rel="stylesheet" href="popup.css">
   <link rel="stylesheet" href="use.css">
+  <link rel="stylesheet" href="capture.css">
 </head>
 <body>
   <main class="app-shell">
@@ -80,16 +81,31 @@
         <div class="box-title-group">
           <div class="box-glyph" aria-hidden="true"><span></span></div>
           <div>
-            <h2 class="box-name"></h2>
+            <div class="box-name-line">
+              <h2 class="box-name"></h2>
+              <span class="capture-default-tag hidden">Capture default</span>
+            </div>
             <p class="box-meta"></p>
           </div>
         </div>
         <button class="button button-ghost button-danger delete-box" type="button">Delete box</button>
       </div>
 
+      <div class="capture-tools" aria-label="Quick capture">
+        <div class="capture-tools-copy">
+          <strong>Quick capture</strong>
+          <span>Put something in this box without saving it first.</span>
+        </div>
+        <div class="capture-tools-actions">
+          <button class="button capture-action paste-image" type="button">Paste image</button>
+          <button class="button capture-action capture-screenshot" type="button">Screenshot</button>
+          <button class="button capture-action set-capture-box" type="button">Capture here</button>
+        </div>
+      </div>
+
       <label class="drop-zone">
         <input class="file-input" type="file" multiple>
-        <span class="drop-title">Drop files here</span>
+        <span class="drop-title">Drop files or webpage images here</span>
         <span class="drop-copy">or click to browse your computer</span>
       </label>
 
