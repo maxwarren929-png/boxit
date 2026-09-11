@@ -6,10 +6,14 @@ Instead of keeping temporary upload files scattered through Downloads, BoxIt sto
 
 ## MVP
 
-- Create and delete named boxes
+- Create, rename, and delete named boxes
 - Import local files with drag and drop or a file picker
 - Store file blobs locally in IndexedDB
-- Browse, download, and delete files by box
+- Browse, rename, preview, download, and delete files by box
+- Search across box names, filenames, and file types
+- Sort boxes/files by default order, recency, name, or size
+- Show exact BoxIt storage usage and browser quota usage when available
+- Detect exact duplicate files and remove redundant copies deliberately
 - Use stored files on website upload controls, including hidden/custom inputs
 - Choose between multiple upload targets on a page
 - Paste clipboard images directly into a box
@@ -19,6 +23,22 @@ Instead of keeping temporary upload files scattered through Downloads, BoxIt sto
 - Automatically create a `Captured` box when a right-click capture has no chosen destination
 - Convert supported files locally without uploading them to a conversion service
 - Give boxes automatic lifetimes, session cleanup, or one-shot deletion
+
+## Quality of life
+
+The popup includes a global search field and visual sort control. `Ctrl/Cmd+K` or `/` focuses search without touching the current box/file order stored in IndexedDB.
+
+Rename controls are available for both boxes and files. Supported files can be previewed locally:
+
+- images
+- text/code/data files, with large text previews truncated
+- PDFs
+- audio
+- video
+
+The storage line shows the exact total size of BoxIt file blobs plus browser quota usage when the browser exposes it.
+
+Duplicate detection is exact rather than filename-based. BoxIt only hashes same-size candidates within the same box, using SHA-256, and marks byte-for-byte matches. The cleanup action keeps the oldest copy and only removes extras after confirmation. Automatic hashing is capped at 64 MB per candidate so opening the popup does not try to digest very large files.
 
 ## Quick capture
 
@@ -66,8 +86,8 @@ Existing boxes have a **Lifetime** control, and temporary boxes display a compac
 
 ## Privacy
 
-BoxIt is local-first. Stored file contents live in the browser's IndexedDB. Clipboard images and screenshots are captured only after an explicit user action. Right-click and webpage captures fetch the item you selected so it can be stored locally. File conversion happens inside the extension. Files leave BoxIt only when you explicitly use or download them.
+BoxIt is local-first. Stored file contents live in the browser's IndexedDB. Clipboard images and screenshots are captured only after an explicit user action. Right-click and webpage captures fetch the item you selected so it can be stored locally. File conversion, previews, search, sorting, storage totals, and duplicate hashing happen inside the extension. Files leave BoxIt only when you explicitly use or download them.
 
 ## Next direction
 
-Planned follow-up work includes search, previews, storage management, and broader conversion support where it can be done safely and reliably in-browser.
+The MVP feature set is now broad enough that the next priority should be a real-browser test and cleanup pass before adding another major feature. After that, likely directions are a side-panel workflow, broader local conversion support, or import/export of whole boxes.
