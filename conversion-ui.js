@@ -110,8 +110,48 @@ function addDynamicControls() {
   `;
   summaryEl.before(dataOptions);
 
+  const documentOptions = document.createElement('div');
+  documentOptions.id = 'convert-document-options';
+  documentOptions.className = 'convert-document-options hidden';
+  documentOptions.innerHTML = `
+    <p class="convert-option-note">DOCX conversion extracts text structure locally, including headings, lists and basic tables. Embedded images and advanced Word layout are not copied into text/Markdown/HTML outputs.</p>
+  `;
+  summaryEl.before(documentOptions);
+
+  const mediaOptions = document.createElement('div');
+  mediaOptions.id = 'convert-media-options';
+  mediaOptions.className = 'convert-media-options hidden';
+  mediaOptions.innerHTML = `
+    <label id="convert-audio-options" class="convert-toggle-row hidden">
+      <input id="convert-audio-mono" type="checkbox">
+      <span>
+        <strong>Mix down to mono</strong>
+        <small>Leave off to preserve the decoded channel count in the WAV.</small>
+      </span>
+    </label>
+    <div id="convert-video-options" class="convert-media-video hidden">
+      <label class="convert-field">
+        <span>Frame timestamp</span>
+        <input id="convert-video-timestamp" type="number" min="0" step="0.1" value="0" inputmode="decimal">
+      </label>
+      <label id="convert-media-quality-field" class="convert-field hidden">
+        <span>JPEG quality</span>
+        <div class="convert-quality-row">
+          <input id="convert-media-quality" type="range" min="10" max="100" value="90">
+          <span id="convert-media-quality-value" class="convert-quality-value">90%</span>
+        </div>
+      </label>
+      <p id="convert-media-detail" class="convert-option-note"></p>
+    </div>
+    <p class="convert-option-note">Media conversion uses codecs already available in Chromium. Unsupported codecs fail cleanly rather than being uploaded anywhere.</p>
+  `;
+  summaryEl.before(mediaOptions);
+
   document.querySelector('#convert-background').addEventListener('input', event => {
     document.querySelector('#convert-background-value').textContent = event.target.value;
+  });
+  document.querySelector('#convert-media-quality').addEventListener('input', event => {
+    document.querySelector('#convert-media-quality-value').textContent = `${event.target.value}%`;
   });
 }
 
@@ -179,6 +219,12 @@ function resetDialog() {
   document.querySelector('#convert-background-value').textContent = '#ffffff';
   document.querySelector('#convert-first-row-headers').checked = true;
   document.querySelector('#convert-json-indent').value = '2';
+  document.querySelector('#convert-audio-mono').checked = false;
+  document.querySelector('#convert-video-timestamp').value = '0';
+  document.querySelector('#convert-video-timestamp').removeAttribute('max');
+  document.querySelector('#convert-media-quality').value = '90';
+  document.querySelector('#convert-media-quality-value').textContent = '90%';
+  document.querySelector('#convert-media-detail').textContent = '';
   document.querySelector('#convert-format-description').textContent = '';
   dimensionsNote.textContent = 'Leave both blank to keep the original dimensions.';
   summaryEl.textContent = 'Conversion happens locally. The original file stays untouched and the converted copy is saved into the same box.';
@@ -197,8 +243,12 @@ function updateOptionVisibility() {
 
   const isImage = pendingProfile?.id === 'image';
   const isTable = pendingProfile?.id === 'table';
+  const isDocument = pendingProfile?.id === 'document';
+  const isMedia = pendingProfile?.id === 'media';
   imageOptions.classList.toggle('hidden', !isImage);
   document.querySelector('#convert-data-options').classList.toggle('hidden', !isTable);
+  document.querySelector('#convert-document-options').classList.toggle('hidden', !isDocument);
+  document.querySelector('#convert-media-options').classList.toggle('hidden', !isMedia);
 
   if (isImage) {
     const lossy = ['jpeg', 'webp'].includes(formatSelect.value);
@@ -212,6 +262,23 @@ function updateOptionVisibility() {
     document.querySelector('#convert-header-field').classList.toggle('hidden', !['csv', 'tsv'].includes(source));
     document.querySelector('#convert-json-style-field').classList.toggle('hidden', formatSelect.value !== 'json');
     summaryEl.textContent = 'Local structured-data conversion. Nested values are preserved as JSON strings when a table format cannot represent them directly.';
+  }
+
+  if (isDocument) {
+    summaryEl.textContent = pendingInspection?.sourceFormat === 'docx'
+      ? 'Local DOCX text extraction. The original Word file is preserved.'
+      : 'Local document normalization. The original file is preserved.';
+  }
+
+  if (isMedia) {
+    const audio = pendingInspection?.kind === 'audio';
+    const video = pendingInspection?.kind === 'video';
+    document.querySelector('#convert-audio-options').classList.toggle('hidden', !audio);
+    document.querySelector('#convert-video-options').classList.toggle('hidden', !video);
+    document.querySelector('#convert-media-quality-field').classList.toggle('hidden', !(video && formatSelect.value === 'jpeg'));
+    summaryEl.textContent = audio
+      ? 'Audio is decoded locally and written as 16-bit PCM WAV.'
+      : 'Video stays intact; BoxIt extracts one still frame locally at the chosen timestamp.';
   }
 }
 
@@ -237,6 +304,15 @@ async function openConvertDialog(record) {
     maxHeightInput.placeholder = String(pendingInspection.height || 'Original');
     dimensionsNote.textContent = `Original: ${pendingInspection.width}×${pendingInspection.height}. Fit mode preserves aspect ratio and never upscales.`;
   }
+  if (pendingProfile.id === 'media' && pendingInspection) {
+    const duration = Number(pendingInspection.duration || 0);
+    if (pendingInspection.kind === 'video') {
+      const timestamp = document.querySelector('#convert-video-timestamp');
+      if (duration > 0) timestamp.max = String(Math.max(0, duration - 0.001));
+      const size = pendingInspection.width && pendingInspection.height ? `${pendingInspection.width}×${pendingInspection.height}` : 'unknown dimensions';
+      document.querySelector('#convert-media-detail').textContent = `${size}${duration > 0 ? ` · ${duration.toFixed(1)}s` : ''}`;
+    }
+  }
 
   updateOptionVisibility();
   dialog.showModal();
@@ -257,7 +333,10 @@ async function convertPending() {
       quality: Number(qualityInput.value),
       background: document.querySelector('#convert-background').value,
       firstRowHeaders: document.querySelector('#convert-first-row-headers').checked,
-      jsonIndent: Number(document.querySelector('#convert-json-indent').value)
+      jsonIndent: Number(document.querySelector('#convert-json-indent').value),
+      audioChannels: document.querySelector('#convert-audio-mono').checked ? 'mono' : 'keep',
+      timestamp: Number(document.querySelector('#convert-video-timestamp').value || 0),
+      mediaQuality: Number(document.querySelector('#convert-media-quality').value || 90)
     };
 
     const result = await convertRecord(pendingRecord, options);
