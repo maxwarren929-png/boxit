@@ -4,9 +4,41 @@ const boxesEl = document.querySelector('#boxes');
 const emptyEl = document.querySelector('#empty');
 const boxTemplate = document.querySelector('#box-template');
 const fileTemplate = document.querySelector('#file-template');
+const fileEmptyTemplate = document.querySelector('#file-empty-template');
+const newBoxDialog = document.querySelector('#new-box-dialog');
+const newBoxForm = document.querySelector('#new-box-form');
+const boxNameInput = document.querySelector('#box-name-input');
+const cancelNewBoxButton = document.querySelector('#cancel-new-box');
 
-document.querySelector('#new-box').addEventListener('click', makeBox);
-document.querySelector('#empty-new-box').addEventListener('click', makeBox);
+for (const button of [document.querySelector('#new-box'), document.querySelector('#empty-new-box')]) {
+  button.addEventListener('click', openNewBoxDialog);
+}
+
+cancelNewBoxButton.addEventListener('click', () => newBoxDialog.close());
+
+newBoxDialog.addEventListener('click', event => {
+  if (event.target === newBoxDialog) newBoxDialog.close();
+});
+
+newBoxForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  const name = boxNameInput.value.trim();
+  if (!name) {
+    boxNameInput.focus();
+    return;
+  }
+
+  await createBox(name);
+  newBoxDialog.close();
+  newBoxForm.reset();
+  await render();
+});
+
+function openNewBoxDialog() {
+  newBoxForm.reset();
+  newBoxDialog.showModal();
+  requestAnimationFrame(() => boxNameInput.focus());
+}
 
 function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`;
@@ -14,11 +46,11 @@ function formatBytes(bytes) {
   return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
 }
 
-async function makeBox() {
-  const name = prompt('Box name?');
-  if (name === null) return;
-  await createBox(name);
-  await render();
+function formatFileType(type) {
+  if (!type) return 'Unknown type';
+  const subtype = type.split('/')[1];
+  if (!subtype) return type;
+  return subtype.replace('vnd.openxmlformats-officedocument.', '').toUpperCase();
 }
 
 async function render() {
@@ -34,6 +66,7 @@ async function render() {
 
     node.querySelector('.box-name').textContent = box.name;
     node.querySelector('.box-meta').textContent = `${files.length} file${files.length === 1 ? '' : 's'}`;
+
     node.querySelector('.delete-box').addEventListener('click', async () => {
       if (!confirm(`Delete “${box.name}” and everything inside it?`)) return;
       await deleteBox(box.id);
@@ -45,19 +78,32 @@ async function render() {
       await render();
     });
 
-    for (const event of ['dragenter', 'dragover']) {
-      drop.addEventListener(event, e => { e.preventDefault(); drop.classList.add('drag'); });
+    for (const eventName of ['dragenter', 'dragover']) {
+      drop.addEventListener(eventName, event => {
+        event.preventDefault();
+        drop.classList.add('drag');
+      });
     }
-    for (const event of ['dragleave', 'drop']) {
-      drop.addEventListener(event, e => { e.preventDefault(); drop.classList.remove('drag'); });
+
+    for (const eventName of ['dragleave', 'drop']) {
+      drop.addEventListener(eventName, event => {
+        event.preventDefault();
+        drop.classList.remove('drag');
+      });
     }
-    drop.addEventListener('drop', async e => {
-      if (e.dataTransfer.files.length) await addFiles(box.id, e.dataTransfer.files);
+
+    drop.addEventListener('drop', async event => {
+      if (event.dataTransfer.files.length) await addFiles(box.id, event.dataTransfer.files);
       await render();
     });
 
     const list = node.querySelector('.file-list');
-    for (const file of files) list.append(await fileRow(file));
+    if (files.length === 0) {
+      list.append(fileEmptyTemplate.content.firstElementChild.cloneNode(true));
+    } else {
+      for (const file of files) list.append(await fileRow(file));
+    }
+
     boxesEl.append(node);
   }
 }
@@ -65,7 +111,7 @@ async function render() {
 async function fileRow(record) {
   const row = fileTemplate.content.firstElementChild.cloneNode(true);
   row.querySelector('.file-name').textContent = record.name;
-  row.querySelector('.file-meta').textContent = `${formatBytes(record.size)} · ${record.type}`;
+  row.querySelector('.file-meta').textContent = `${formatBytes(record.size)} · ${formatFileType(record.type)}`;
 
   row.querySelector('.delete-file').addEventListener('click', async () => {
     await deleteFile(record.id);
@@ -75,10 +121,10 @@ async function fileRow(record) {
   row.querySelector('.download-file').addEventListener('click', async () => {
     const stored = await getFile(record.id);
     const url = URL.createObjectURL(stored.blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = stored.name;
-    a.click();
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = stored.name;
+    anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
 
@@ -87,10 +133,16 @@ async function fileRow(record) {
     const bytes = [...new Uint8Array(await stored.blob.arrayBuffer())];
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) return;
+
     try {
       await chrome.tabs.sendMessage(tab.id, {
         type: 'BOXIT_USE_FILE',
-        file: { name: stored.name, type: stored.type, lastModified: stored.lastModified, bytes }
+        file: {
+          name: stored.name,
+          type: stored.type,
+          lastModified: stored.lastModified,
+          bytes
+        }
       });
       window.close();
     } catch {
