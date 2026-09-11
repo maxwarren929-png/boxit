@@ -38,7 +38,7 @@ Rename controls are available for both boxes and files. Supported files can be p
 
 The storage line shows the exact total size of BoxIt file blobs plus browser quota usage when the browser exposes it.
 
-Duplicate detection is exact rather than filename-based. BoxIt only hashes same-size candidates within the same box, using SHA-256, and marks byte-for-byte matches. The cleanup action keeps the oldest copy and only removes extras after confirmation. Automatic hashing is capped at 64 MB per candidate so opening the popup does not try to digest very large files.
+Duplicate detection is exact rather than filename-based. BoxIt only hashes same-size candidates within the same box, using SHA-256, and marks byte-for-byte matches. The cleanup action keeps the oldest copy and only removes extras after confirmation. Automatic hashing is capped at 64 MB per candidate so opening the popup does not try to digest very large files. Empty files are supported as duplicates too.
 
 ## Quick capture
 
