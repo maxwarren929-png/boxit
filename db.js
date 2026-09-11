@@ -108,6 +108,35 @@ export async function createBox(name, options = {}) {
   return box;
 }
 
+export async function renameBox(boxId, name) {
+  const nextName = String(name || '').trim();
+  if (!nextName) throw new Error('Box name cannot be empty.');
+
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(BOX_STORE, 'readwrite');
+    const store = tx.objectStore(BOX_STORE);
+    const request = store.get(boxId);
+    let updated = null;
+
+    request.onsuccess = () => {
+      const box = request.result;
+      if (!box) return;
+      updated = { ...box, name: nextName.slice(0, 48) };
+      store.put(updated);
+    };
+    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => {
+      db.close();
+      resolve(updated);
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error);
+    };
+  });
+}
+
 export async function updateBoxLifecycle(boxId, lifecycle) {
   const db = await openDb();
   return new Promise((resolve, reject) => {
@@ -232,6 +261,17 @@ export async function listFiles(boxId) {
   });
 }
 
+export async function listAllFiles() {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(FILE_STORE, 'readonly');
+    const request = tx.objectStore(FILE_STORE).getAll();
+    request.onsuccess = () => resolve(request.result.sort((a, b) => b.createdAt - a.createdAt));
+    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => db.close();
+  });
+}
+
 export async function getFile(fileId) {
   const db = await openDb();
   return new Promise((resolve, reject) => {
@@ -240,6 +280,61 @@ export async function getFile(fileId) {
     request.onsuccess = () => resolve(request.result || null);
     request.onerror = () => reject(request.error);
     tx.oncomplete = () => db.close();
+  });
+}
+
+export async function renameFile(fileId, name) {
+  const nextName = String(name || '').trim();
+  if (!nextName) throw new Error('File name cannot be empty.');
+
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(FILE_STORE, 'readwrite');
+    const store = tx.objectStore(FILE_STORE);
+    const request = store.get(fileId);
+    let updated = null;
+
+    request.onsuccess = () => {
+      const record = request.result;
+      if (!record) return;
+      updated = { ...record, name: nextName.slice(0, 180) };
+      store.put(updated);
+    };
+    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => {
+      db.close();
+      resolve(updated);
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error);
+    };
+  });
+}
+
+export async function setFileHash(fileId, hash) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(FILE_STORE, 'readwrite');
+    const store = tx.objectStore(FILE_STORE);
+    const request = store.get(fileId);
+    let updated = null;
+
+    request.onsuccess = () => {
+      const record = request.result;
+      if (!record) return;
+      updated = { ...record, hash: String(hash || '') };
+      store.put(updated);
+    };
+    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => {
+      db.close();
+      resolve(updated);
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error);
+    };
   });
 }
 
