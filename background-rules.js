@@ -69,9 +69,14 @@ chrome.alarms.onAlarm.addListener(async alarm => {
     if (alarm.name === RULE_SCAN_ALARM || alarm.name === RULE_PERIODIC_SCAN_ALARM) {
       const stored = await chrome.storage.session.get('boxitRuleCaptureHint').catch(() => ({}));
       const hint = stored.boxitRuleCaptureHint;
-      const freshHint = hint && Date.now() - Number(hint.at || 0) < 15000 ? hint : {};
+      const hintAge = hint ? Date.now() - Number(hint.at || 0) : Infinity;
+      const freshHint = hint && hintAge < 120000 ? hint : {};
       const result = await scanPendingFiles(freshHint);
-      if (hint) await chrome.storage.session.remove('boxitRuleCaptureHint').catch(() => {});
+      if (hint && (result.processed > 0 || hintAge >= 120000)) {
+        await chrome.storage.session.remove('boxitRuleCaptureHint').catch(() => {});
+      } else if (hint && result.processed === 0) {
+        scheduleRuleScan(1200);
+      }
       if (result.remaining > 0) scheduleRuleScan(400);
     }
   } catch (error) {
