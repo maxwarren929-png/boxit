@@ -62,6 +62,7 @@ function hostOf(url) {
 
 function matchesRule(rule, record, trigger, context = {}) {
   if (!rule.enabled) return false;
+  if (Number(record.createdAt || 0) < Number(rule.createdAt || 0)) return false;
   if (rule.trigger !== 'any' && rule.trigger !== trigger) return false;
   const conditions = rule.conditions || {};
   if (conditions.boxId && conditions.boxId !== record.boxId) return false;
