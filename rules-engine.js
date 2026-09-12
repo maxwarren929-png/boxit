@@ -68,7 +68,8 @@ function matchesRule(rule, record, trigger, context = {}) {
   if (conditions.category && conditions.category !== categoryOf(record)) return false;
   if (conditions.extensions?.length && !conditions.extensions.includes(extensionOf(record.name))) return false;
   if (conditions.nameContains && !String(record.name || '').toLowerCase().includes(conditions.nameContains)) return false;
-  const host = hostOf(record.sourceUrl || context.sourceUrl || context.pageUrl || '');
+  const capturePageUrl = CAPTURE_SOURCES.has(String(record.source || '').toLowerCase()) ? context.pageUrl || '' : '';
+  const host = hostOf(record.sourceUrl || context.sourceUrl || capturePageUrl || '');
   if (conditions.hostContains && !host.includes(conditions.hostContains)) return false;
   const size = Number(record.size || 0);
   if (conditions.minBytes > 0 && size < conditions.minBytes) return false;
@@ -86,7 +87,7 @@ function templateName(template, record, context = {}) {
     date: now.toISOString().slice(0, 10),
     time: now.toTimeString().slice(0, 8).replace(/:/g, '-'),
     source: String(record.source || 'file').replace(/[^a-z0-9_-]+/gi, '-'),
-    host: hostOf(record.sourceUrl || context.sourceUrl || context.pageUrl || '') || 'local'
+    host: hostOf(record.sourceUrl || context.sourceUrl || (CAPTURE_SOURCES.has(String(record.source || '').toLowerCase()) ? context.pageUrl || '' : '')) || 'local'
   };
   let name = String(template || '').replace(/\{(name|base|ext|date|time|source|host)\}/g, (_all, token) => tokens[token]);
   name = name.replace(/[\\/\0]/g, '-').replace(/\s+/g, ' ').trim();
@@ -229,7 +230,8 @@ async function applyRule(rule, record, context, depth, trace) {
         sourceUrl: current.sourceUrl || context.sourceUrl || context.pageUrl || '',
         parentFileId: current.id,
         ruleTrace: [...trace, rule.id],
-        rulesProcessedVersion: 0
+        rulesProcessedVersion: 0,
+        expiresAt: Number(current.expiresAt || 0) || undefined
       });
       generated += 1;
       changed = true;
