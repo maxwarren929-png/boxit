@@ -1,6 +1,6 @@
 # BoxIt Rules
 
-Rules make BoxIt react to files as they enter the browser filesystem.
+Rules make BoxIt react to files as they enter the browser filesystem. Rules are deliberately non-retroactive: a rule only applies to files created after that rule was created, so adding a new rule cannot unexpectedly reorganize old boxes.
 
 A rule has one trigger, zero or more conditions, and one or more actions. Every filled condition must match. Matching rules run in creation order unless a rule has **Stop after this rule** enabled.
 
@@ -15,7 +15,7 @@ A rule has one trigger, zero or more conditions, and one or more actions. Every 
 
 Rules can match by source box, file category, one or more extensions, filename text, website host, and minimum/maximum file size.
 
-Website matching uses the page/capture URL when BoxIt has it. A host condition such as `github.com` therefore matches GitHub captures without needing a full URL pattern language.
+Website matching uses a capture's source/page URL when BoxIt knows it. A host condition such as `github.com` therefore matches GitHub captures without accidentally treating an unrelated local import as a GitHub file just because that tab was open.
 
 ## Actions
 
@@ -25,7 +25,7 @@ Website matching uses the page/capture URL when BoxIt has it. A host condition s
 - **Reject exact duplicates** SHA-256 hashes same-size candidates and deletes only the newly-added byte-for-byte duplicate. Automatic duplicate rule hashing is capped at 64 MB per file.
 - **Auto-convert** supports common raster images to PNG/JPEG/WebP and structured data to JSON/CSV/TSV/NDJSON. Unsupported source/target combinations are skipped and logged.
 
-Generated conversion files carry a rule trace. A rule will not run twice in the same conversion chain, and automatic chains stop after a small depth limit, preventing conversion loops.
+Generated conversion files carry a rule trace. A rule will not run twice in the same conversion chain, and automatic chains stop after a small depth limit, preventing conversion loops. If the source file already has a rule-set expiry, its automatic converted copy inherits that expiry.
 
 ## Execution
 
