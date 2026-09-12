@@ -166,16 +166,6 @@ async function logRule(rule, record, message, tone = 'success') {
   await appendRuleLog({ ruleId: rule.id, ruleName: rule.name, fileName: record?.name || '', message, tone });
 }
 
-function humanDuration(milliseconds) {
-  const seconds = Math.round(milliseconds / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 48) return `${hours}h`;
-  return `${Math.round(hours / 24)}d`;
-}
-
 async function applyRule(rule, record, context, depth, trace) {
   const actions = rule.actions || {};
   let changed = false;
@@ -227,7 +217,7 @@ async function applyRule(rule, record, context, depth, trace) {
       let saved = await addBlob(current.boxId, converted.blob, converted.name, { source: 'rule-conversion' });
       saved = await patchFile(saved.id, {
         source: 'rule-conversion',
-        sourceUrl: current.sourceUrl || context.sourceUrl || context.pageUrl || '',
+        sourceUrl: current.sourceUrl || '',
         parentFileId: current.id,
         ruleTrace: [...trace, rule.id],
         rulesProcessedVersion: 0,
@@ -246,6 +236,16 @@ async function applyRule(rule, record, context, depth, trace) {
 
   await logRule(rule, current, notes.length ? notes.join(' · ') : 'Matched with no changes.', notes.length ? 'success' : 'skip');
   return { record: current, deleted: false, changed, generated, note: notes.join(' · ') };
+}
+
+function humanDuration(milliseconds) {
+  const seconds = Math.round(milliseconds / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours}h`;
+  return `${Math.round(hours / 24)}d`;
 }
 
 async function processFile(fileId, context = {}, depth = 0) {
@@ -305,9 +305,8 @@ export async function scanPendingFiles(context = {}) {
   if (scanPromise) return scanPromise;
   scanPromise = (async () => {
     const files = await listAllFiles();
-    const allPending = files.filter(file => Number(file.rulesProcessedVersion || 0) < RULES_PROCESSED_VERSION);
-    const pending = allPending.slice(0, MAX_SCAN_BATCH);
-    const aggregate = { processed: 0, changed: false, deleted: 0, generated: 0, results: [], remaining: Math.max(0, allPending.length - pending.length) };
+    const pending = files.filter(file => Number(file.rulesProcessedVersion || 0) < RULES_PROCESSED_VERSION).slice(0, MAX_SCAN_BATCH);
+    const aggregate = { processed: 0, changed: false, deleted: 0, generated: 0, results: [], remaining: Math.max(0, files.filter(file => Number(file.rulesProcessedVersion || 0) < RULES_PROCESSED_VERSION).length - pending.length) };
     for (const file of pending) {
       const hintMatches = !context.source || context.source === file.source;
       const fileContext = hintMatches ? context : {};
