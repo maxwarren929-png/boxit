@@ -257,7 +257,7 @@ async function processFile(fileId, context = {}, depth = 0) {
     return { processed: true, changed: false, deleted: false, generated: 0, results: [] };
   }
 
-  const contextUrl = record.sourceUrl || context.sourceUrl || context.pageUrl || '';
+  const contextUrl = record.sourceUrl || context.sourceUrl || (CAPTURE_SOURCES.has(String(record.source || '').toLowerCase()) ? context.pageUrl || '' : '');
   if (!record.sourceUrl && contextUrl) record = await patchFile(record.id, { sourceUrl: contextUrl });
   const trigger = context.trigger || sourceTrigger(record);
   const rules = await listRules();
