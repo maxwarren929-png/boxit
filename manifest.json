@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "BoxIt",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Keep temporary upload files in local browser boxes instead of cluttering Downloads.",
   "permissions": ["storage", "activeTab", "scripting", "clipboardRead", "contextMenus", "alarms"],
   "host_permissions": ["<all_urls>"],
@@ -10,7 +10,7 @@
     "default_title": "BoxIt"
   },
   "background": {
-    "service_worker": "background-v2.js",
+    "service_worker": "background-rules.js",
     "type": "module"
   },
   "content_scripts": [

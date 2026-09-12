@@ -18,6 +18,7 @@ Instead of keeping temporary upload files scattered through Downloads, BoxIt sto
 - Right-click images or links into BoxIt
 - Convert supported files locally
 - Give boxes timed, session, or one-shot lifetimes
+- Automate new files with local rules
 
 ## Quality of life
 
@@ -28,6 +29,18 @@ Supported local previews include images, text/code/data files, PDFs, audio, and 
 ## Quick capture
 
 Each box can paste clipboard images, capture the visible tab as PNG, and become the destination for future right-click captures. The drop zone also accepts local files and supported webpage image/file URLs.
+
+## Rules
+
+The **Rules** manager lets BoxIt react to new imported, captured, or converted files. Rules are non-retroactive: creating a rule never reorganizes files that were already in BoxIt before the rule existed.
+
+Rules can match by box, file category, extension, filename text, capture website, and file size. A matching rule can move the file, rename it from a template, give the individual file an expiry, reject a byte-for-byte duplicate, or automatically create a converted image/data copy.
+
+Automatic image rules support PNG/JPEG/WebP outputs. Structured-data rules support JSON/CSV/TSV/NDJSON outputs. Conversion chains carry a rule trace and have a depth limit so two rules cannot convert files forever. Rule activity is logged locally in the Rules manager.
+
+Individual rule-based file expiry is separate from box lifetime. BoxIt tracks the next due file with one Chrome alarm rather than creating an alarm for every temporary file.
+
+See `RULES.md` for the complete rule model and limits.
 
 ## Conversion engine v2
 
@@ -123,8 +136,8 @@ Timed expiry uses Chrome alarms. One-shot boxes require explicit cleanup after a
 
 ## Privacy
 
-BoxIt is local-first. Stored file contents live in IndexedDB. Clipboard capture, screenshots, conversion, previews, search, sorting, storage totals, and duplicate hashing run locally. Files leave BoxIt only when you explicitly use or download them.
+BoxIt is local-first. Stored file contents live in IndexedDB. Clipboard capture, screenshots, conversion, rules, previews, search, sorting, storage totals, and duplicate hashing run locally. Files leave BoxIt only when you explicitly use or download them.
 
 ## Next direction
 
-The next major architecture candidates are a persistent side-panel workflow, box import/export, PDF conversion, and a worker/WASM adapter for true audio/video transcoding.
+Likely next steps are box import/export, PDF conversion, reusable conversion presets, and a worker/WASM adapter for true audio/video transcoding.
